@@ -1,34 +1,35 @@
-# app_repo
+# aivudaAppStore
 
-远端应用仓库服务（可上传、更新、下架）。
+aivudaAppStore 现已拆分为独立的后端与前端目录。
 
-## 启动
+## 目录
 
-```bash
-python3 -m pip install --user -r app_repo/requirements.txt
-python3 -m uvicorn app_repo.main:app --host 0.0.0.0 --port 9001
-```
+- `backend/`: FastAPI 后端（开发者管理 + 公开商店接口）
+- `frontend/`: 开发者管理前端（Vue 3 + Vite）
 
-## 关键接口
+## 快速启动
 
-- `GET /repo/index` 应用商店目录（仅 `listed`）
-- `POST /repo/apps/upload` 上传或更新应用版本（multipart）
-- `POST /repo/apps/{app_id}/delist` 下架应用
-- `POST /repo/apps/{app_id}/list` 重新上架
-- `DELETE /repo/apps/{app_id}/versions/{version}` 删除版本
-- `GET /repo/admin/apps` 管理端列表
-
-## 上传示例
+1. 启动后端
 
 ```bash
-curl -X POST http://127.0.0.1:9001/repo/apps/upload \
-  -F app_id=serial-tool \
-  -F version=2.2.0 \
-  -F name='Serial Tool' \
-  -F runtime=host \
-  -F run_entrypoint='./serial-tool' \
-  -F run_args_json='["--device","/dev/ttyUSB0"]' \
-  -F config_schema_json='{"type":"object","properties":{"device":{"type":"string"},"baudrate":{"type":"integer"}}}' \
-  -F default_config_json='{"device":"/dev/ttyUSB0","baudrate":115200}' \
-  -F file=@/path/to/serial-tool.tar.gz
+cd backend
+python3 -m pip install --user -r requirements.txt
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9001
 ```
+
+2. 启动前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+打开 `http://127.0.0.1:5174`。
+
+如果后端不在同域，登录页填写 `Backend URL`（例如 `http://127.0.0.1:9001`）。
+
+## 默认开发者账号
+
+- 用户名: `admin`
+- 密码: `admin123`
