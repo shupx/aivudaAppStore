@@ -1,7 +1,7 @@
 import { reactive } from "vue";
 
 export const session = reactive({
-  baseUrl: localStorage.getItem("appstore_base_url") || "",
+  baseUrl: localStorage.getItem("appstore_base_url") || "http://127.0.0.1:9001",
   token: localStorage.getItem("appstore_token") || "",
   user: null,
 });
@@ -35,21 +35,11 @@ export async function request(path, { method = "GET", body = null, auth = false 
   return data;
 }
 
-export function toFormData(payload, file = null) {
-  const fd = new FormData();
-  Object.entries(payload).forEach(([k, v]) => {
-    if (v === "" || v === null || v === undefined) return;
-    fd.append(k, v);
-  });
-  if (file) fd.append("file", file);
-  return fd;
-}
-
 export async function login(username, password) {
-  const data = await request("/dev/auth/login", {
-    method: "POST",
-    body: toFormData({ username, password }),
-  });
+  const fd = new FormData();
+  fd.append("username", username);
+  fd.append("password", password);
+  const data = await request("/dev/auth/login", { method: "POST", body: fd });
   session.token = data.access_token;
   session.user = data.user;
   localStorage.setItem("appstore_token", session.token);
@@ -76,10 +66,6 @@ export async function fetchStoreAppDetail(appId) {
   return request(`/store/apps/${encodeURIComponent(appId)}`, { auth: true });
 }
 
-export async function uploadSimpleApp(payload, file) {
-  return request("/dev/apps/upload-simple", {
-    method: "POST",
-    body: toFormData(payload, file),
-    auth: true,
-  });
+export async function uploadPackage(formData) {
+  return request("/dev/apps/upload-package", { method: "POST", body: formData, auth: true });
 }

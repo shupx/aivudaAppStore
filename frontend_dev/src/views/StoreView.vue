@@ -44,9 +44,8 @@ onMounted(load);
           v-for="item in apps"
           :key="item.app_id"
           :title="item.manifest?.name || item.app_id"
-          :subtitle="`${item.app_id} · ${item.version}`"
+          :subtitle="`版本 ${item.version}`"
           :description="item.manifest?.description || ''"
-          :tag="item.manifest?.category || ''"
           @click="goDetail(item.app_id)"
         />
       </div>

@@ -113,6 +113,16 @@ button.danger {
   color: var(--muted);
 }
 
+.link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
 .page-wrap {
   width: min(1240px, 96vw);
   margin: 16px auto;
@@ -218,6 +228,9 @@ h2 {
 
 .app-head h3 {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sub {
@@ -228,6 +241,11 @@ h2 {
 .desc {
   margin: 0;
   color: #dce4ef;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .chip {
@@ -257,6 +275,17 @@ h2 {
   margin: 0;
 }
 
+.detail-section {
+  display: grid;
+  gap: 8px;
+}
+
+.detail-title {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
 .ops-grid {
   display: grid;
   gap: 14px;
@@ -278,6 +307,26 @@ h2 {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.file-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.file-label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.file-row input[type="file"] {
+  width: auto;
 }
 
 .output-box {

@@ -9,15 +9,8 @@ const router = useRouter();
 const loading = ref(true);
 const detail = ref(null);
 
-function formatTs(ts) {
-  if (!ts) return "-";
-  const date = new Date(ts * 1000);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${d} ${hh}:${mm}`;
+function pretty(data) {
+  return JSON.stringify(data, null, 2);
 }
 
 async function load() {
@@ -42,15 +35,25 @@ onMounted(load);
     <AppTopBar title="应用详情" :subtitle="String(route.params.appId)" />
 
     <section class="card list-wrap">
-      <h2>版本列表</h2>
+      <h2>repo.db 记录</h2>
       <div v-if="loading" class="hint">加载中...</div>
-      <div v-else-if="!detail || !detail.items || detail.items.length === 0" class="hint">暂无可用版本</div>
+      <div v-else-if="!detail || !detail.db_records" class="hint">无记录</div>
       <div v-else class="version-list">
-        <article v-for="item in detail.items" :key="item.version" class="version-item">
-          <h3>{{ item.version }}</h3>
-          <p class="sub">更新时间: {{ formatTs(item.updated_at) }}</p>
-          <p>{{ item.manifest?.description || '暂无描述' }}</p>
-          <p class="sub">运行时目标: {{ (item.manifest?.targets || []).map((t) => `${t.os}/${t.arch}`).join(', ') || '-' }}</p>
+        <article class="version-item detail-section">
+          <h3 class="detail-title">app</h3>
+          <pre>{{ pretty(detail.db_records.app || {}) }}</pre>
+        </article>
+        <article class="version-item detail-section">
+          <h3 class="detail-title">app_version</h3>
+          <pre>{{ pretty(detail.db_records.app_version || []) }}</pre>
+        </article>
+        <article class="version-item detail-section">
+          <h3 class="detail-title">app_target</h3>
+          <pre>{{ pretty(detail.db_records.app_target || []) }}</pre>
+        </article>
+        <article class="version-item detail-section">
+          <h3 class="detail-title">app_audit_log</h3>
+          <pre>{{ pretty(detail.db_records.app_audit_log || []) }}</pre>
         </article>
       </div>
     </section>

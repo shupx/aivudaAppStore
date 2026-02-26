@@ -17,3 +17,9 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9001
 
 - 用户名: `admin`
 - 密码: `admin123`
+
+## 安装包规范
+
+见 `backend/docs/app-package-spec.md`。
+
+示例包下载：`GET /store/sample-package`。

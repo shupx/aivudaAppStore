@@ -17,10 +17,10 @@ python3 -m pip install --user -r requirements.txt
 python3 -m uvicorn main:app --host 0.0.0.0 --port 9001
 ```
 
-2. 启动前端
+2. 启动前端（应用开发者界面）
 
 ```bash
-cd frontend
+cd frontend_dev
 npm install
 npm run dev
 ```
