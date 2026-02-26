@@ -16,6 +16,10 @@ function apiUrl(path) {
   return `${session.baseUrl.replace(/\/$/, "")}${path}`;
 }
 
+export function buildApiUrl(path) {
+  return apiUrl(path);
+}
+
 export async function request(path, { method = "GET", body = null, auth = false } = {}) {
   const headers = {};
   if (auth) {
@@ -64,6 +68,10 @@ export async function fetchStoreApps() {
 
 export async function fetchStoreAppDetail(appId) {
   return request(`/store/apps/${encodeURIComponent(appId)}`, { auth: true });
+}
+
+export async function fetchStoreDownloadUrl(appId, version) {
+  return request(`/store/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}/download-url`, { auth: true });
 }
 
 export async function uploadPackage(formData) {

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted, onBeforeUnmount } from "vue";
 import { useRouter } from "vue-router";
 import { logout, session } from "../services/api";
 
@@ -11,6 +11,7 @@ defineProps({
 
 const router = useRouter();
 const open = ref(false);
+const accountWrap = ref(null);
 
 function go(path) {
   open.value = false;
@@ -31,6 +32,24 @@ function doLogout() {
   logout();
   router.push("/login");
 }
+
+function closeMenu() {
+  open.value = false;
+}
+
+function handleClickOutside(event) {
+  if (accountWrap.value && !accountWrap.value.contains(event.target)) {
+    open.value = false;
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("click", handleClickOutside);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", handleClickOutside);
+});
 </script>
 
 <template>
@@ -44,7 +63,7 @@ function doLogout() {
       <button v-if="showBack" class="icon-btn" @click="goBack" title="返回">←</button>
     </div>
 
-    <div class="account-wrap">
+    <div ref="accountWrap" class="account-wrap">
       <button class="icon-btn" @click="open = !open" title="账户">👤</button>
       <div v-if="open" class="account-menu">
         <div class="account-user">{{ session.user?.username }} ({{ session.user?.role }})</div>

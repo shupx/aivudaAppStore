@@ -3,11 +3,12 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AppCard from "../components/AppCard.vue";
 import AppTopBar from "../components/AppTopBar.vue";
-import { fetchMe, fetchStoreApps, logout } from "../services/api";
+import { buildApiUrl, fetchMe, fetchStoreApps, fetchStoreDownloadUrl, logout } from "../services/api";
 
 const router = useRouter();
 const loading = ref(true);
 const apps = ref([]);
+const downloadingId = ref("");
 
 async function load() {
   loading.value = true;
@@ -25,6 +26,57 @@ async function load() {
 
 function goDetail(appId) {
   router.push(`/apps/${encodeURIComponent(appId)}`);
+}
+
+function triggerBrowserDownload(fileUrl, filename) {
+  const link = document.createElement("a");
+  link.href = fileUrl;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+async function downloadPackage(item) {
+  const key = `${item.app_id}:${item.version}`;
+  downloadingId.value = key;
+  try {
+    const info = await fetchStoreDownloadUrl(item.app_id, item.version);
+    const fileUrl = buildApiUrl(info.url);
+    const filename = `${item.app_id}-${item.version}.zip`;
+
+    const res = await fetch(fileUrl);
+    if (!res.ok) throw new Error(`下载失败: ${res.status}`);
+    const blob = await res.blob();
+
+    if ("showSaveFilePicker" in window && window.isSecureContext) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: "ZIP Package", accept: { "application/zip": [".zip"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (pickerErr) {
+        const name = pickerErr?.name || "";
+        if (name === "AbortError" || name === "NotAllowedError" || name === "SecurityError") {
+          return;
+        }
+        throw pickerErr;
+      }
+    }
+
+    const blobUrl = URL.createObjectURL(blob);
+    triggerBrowserDownload(blobUrl, filename);
+    URL.revokeObjectURL(blobUrl);
+  } catch (err) {
+    window.alert(String(err));
+  } finally {
+    downloadingId.value = "";
+  }
 }
 
 onMounted(load);
@@ -46,7 +98,9 @@ onMounted(load);
           :title="item.manifest?.name || item.app_id"
           :subtitle="`版本 ${item.version}`"
           :description="item.manifest?.description || ''"
+          :downloading="downloadingId === `${item.app_id}:${item.version}`"
           @click="goDetail(item.app_id)"
+          @download="downloadPackage(item)"
         />
       </div>
     </section>

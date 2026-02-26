@@ -4,8 +4,8 @@ aivudaAppStore 现已拆分为独立的后端与前端目录。
 
 ## 目录
 
-- `backend/`: FastAPI 后端（开发者管理 + 公开商店接口）
-- `frontend/`: 开发者管理前端（Vue 3 + Vite）
+- `backend/`: python FastAPI 后端（开发者管理 + 公开商店接口）
+- `frontend_dev/`: 开发者管理前端（Vue 3 + Vite）
 
 ## 快速启动
 
@@ -14,7 +14,7 @@ aivudaAppStore 现已拆分为独立的后端与前端目录。
 ```bash
 cd backend
 python3 -m pip install --user -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9001
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 ```
 
 2. 启动前端（应用开发者界面）
