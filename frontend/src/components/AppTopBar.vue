@@ -49,7 +49,6 @@ function doLogout() {
       <div v-if="open" class="account-menu">
         <div class="account-user">{{ session.user?.username }} ({{ session.user?.role }})</div>
         <button @click="go('/store')">全部应用</button>
-        <button @click="go('/me/apps')">我的应用</button>
         <button @click="go('/me/new')">+ 上传新应用</button>
         <button class="danger" @click="doLogout">退出登录</button>
       </div>

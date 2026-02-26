@@ -76,46 +76,10 @@ export async function fetchStoreAppDetail(appId) {
   return request(`/store/apps/${encodeURIComponent(appId)}`, { auth: true });
 }
 
-export async function fetchMyApps() {
-  return request("/dev/apps", { auth: true });
-}
-
-export async function fetchMyAppDetail(appId) {
-  return request(`/dev/apps/${encodeURIComponent(appId)}`, { auth: true });
-}
-
-export async function createApp(payload) {
-  return request("/dev/apps", { method: "POST", body: toFormData(payload), auth: true });
-}
-
-export async function createVersion(appId, payload) {
-  return request(`/dev/apps/${encodeURIComponent(appId)}/versions`, {
-    method: "POST",
-    body: toFormData(payload),
-    auth: true,
-  });
-}
-
-export async function uploadTarget(appId, version, payload, file = null) {
-  return request(`/dev/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}/targets`, {
+export async function uploadSimpleApp(payload, file) {
+  return request("/dev/apps/upload-simple", {
     method: "POST",
     body: toFormData(payload, file),
-    auth: true,
-  });
-}
-
-export async function publishVersion(appId, version) {
-  return request(`/dev/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}/publish`, {
-    method: "POST",
-    body: new FormData(),
-    auth: true,
-  });
-}
-
-export async function unpublishVersion(appId, version) {
-  return request(`/dev/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}/unpublish`, {
-    method: "POST",
-    body: new FormData(),
     auth: true,
   });
 }
