@@ -77,3 +77,46 @@ export async function fetchStoreDownloadUrl(appId, version) {
 export async function uploadPackage(formData) {
   return request("/dev/apps/upload-package", { method: "POST", body: formData, auth: true });
 }
+
+export async function uploadVersion(appId, formData) {
+  return request(`/dev/apps/${encodeURIComponent(appId)}/versions`, {
+    method: "POST",
+    body: formData,
+    auth: true,
+  });
+}
+
+export async function modifyVersion(appId, version, formData) {
+  return request(
+    `/dev/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}`,
+    { method: "PATCH", body: formData, auth: true }
+  );
+}
+
+export async function unpublishVersion(appId, version) {
+  return request(
+    `/dev/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}/unpublish`,
+    { method: "POST", auth: true }
+  );
+}
+
+export async function publishVersion(appId, version) {
+  return request(
+    `/dev/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}/publish`,
+    { method: "POST", auth: true }
+  );
+}
+
+export async function deleteVersion(appId, version) {
+  return request(
+    `/dev/apps/${encodeURIComponent(appId)}/versions/${encodeURIComponent(version)}`,
+    { method: "DELETE", auth: true }
+  );
+}
+
+export async function deleteApp(appId) {
+  return request(
+    `/dev/apps/${encodeURIComponent(appId)}`,
+    { method: "DELETE", auth: true }
+  );
+}

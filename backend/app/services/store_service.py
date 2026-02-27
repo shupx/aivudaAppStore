@@ -8,16 +8,12 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 from app.core.settings import FILES_DIR, ROOT
-from app.services.db import build_manifest, db_conn, get_targets, pick_latest_published_version
+from app.services.db import build_manifest, db_conn, get_targets, pick_largest_published_version
 from app.services.utils import now_ts
 
 SAMPLE_DIR = ROOT / "samples"
 SAMPLE_APP_DIR = SAMPLE_DIR / "app"
 SAMPLE_PACKAGE = SAMPLE_DIR / "sample-package.zip"
-
-
-def _row_to_dict(row: Any) -> dict[str, Any]:
-    return {key: row[key] for key in row.keys()}
 
 
 def store_index() -> dict[str, Any]:
@@ -26,7 +22,7 @@ def store_index() -> dict[str, Any]:
 
         items = []
         for app_row in apps:
-            version_row = pick_latest_published_version(conn, app_row["id"])
+            version_row = pick_largest_published_version(conn, app_row["id"])
             if not version_row:
                 continue
 
@@ -66,65 +62,55 @@ def store_app_detail(app_id: str) -> dict[str, Any]:
         if not app_row:
             raise HTTPException(status_code=404, detail="app 不存在")
 
-        versions = conn.execute(
+        all_versions = conn.execute(
             """
             SELECT * FROM app_version
-            WHERE app_id = ? AND status = 'published'
-            ORDER BY published_at DESC, created_at DESC
+            WHERE app_id = ?
+            ORDER BY created_at DESC
             """,
             (app_row["id"],),
         ).fetchall()
 
+        # Structured versions array (all versions including unpublished)
+        versions = []
+        for v_row in all_versions:
+            targets = get_targets(conn, version_id=v_row["id"])
+            artifact_size = targets[0]["artifact_size"] if targets else 0
+            artifact_url = f"/files/{targets[0]['artifact_relpath']}" if targets and targets[0]["artifact_relpath"] else ""
+            versions.append({
+                "version": v_row["version"],
+                "description": v_row["description"],
+                "status": v_row["status"],
+                "published_at": v_row["published_at"],
+                "created_at": v_row["created_at"],
+                "updated_at": v_row["updated_at"],
+                "artifact_size": artifact_size,
+                "artifact_url": artifact_url,
+            })
+
+        # Published items with manifests (backward compat)
         items = []
-        for version_row in versions:
-            targets = get_targets(conn, version_id=version_row["id"])
-
-            items.append(
-                {
-                    "version": version_row["version"],
-                    "manifest": build_manifest(app_row=app_row, version_row=version_row, target_rows=targets),
-                    "updated_at": version_row["updated_at"],
-                }
-            )
-
-        version_rows = conn.execute(
-            """
-            SELECT *
-            FROM app_version
-            WHERE app_id = ?
-            ORDER BY created_at DESC
-            """,
-            (app_row["id"],),
-        ).fetchall()
-        version_ids = [row["id"] for row in version_rows]
-
-        target_rows = []
-        if version_ids:
-            placeholders = ",".join("?" for _ in version_ids)
-            target_rows = conn.execute(
-                f"SELECT * FROM app_target WHERE version_id IN ({placeholders}) ORDER BY created_at DESC",
-                tuple(version_ids),
-            ).fetchall()
-
-        audit_rows = conn.execute(
-            """
-            SELECT *
-            FROM app_audit_log
-            WHERE app_id = ?
-            ORDER BY created_at DESC
-            """,
-            (app_row["id"],),
-        ).fetchall()
+        for v_row in all_versions:
+            if v_row["status"] != "published":
+                continue
+            targets = get_targets(conn, version_id=v_row["id"])
+            items.append({
+                "version": v_row["version"],
+                "manifest": build_manifest(app_row=app_row, version_row=v_row, target_rows=targets),
+                "updated_at": v_row["updated_at"],
+            })
 
     return {
         "app_id": app_id,
-        "items": items,
-        "db_records": {
-            "app": _row_to_dict(app_row),
-            "app_version": [_row_to_dict(row) for row in version_rows],
-            "app_target": [_row_to_dict(row) for row in target_rows],
-            "app_audit_log": [_row_to_dict(row) for row in audit_rows],
+        "app": {
+            "name": app_row["name"],
+            "description": app_row["description"],
+            "owner_user_id": app_row["owner_user_id"],
+            "created_at": app_row["created_at"],
+            "updated_at": app_row["updated_at"],
         },
+        "versions": versions,
+        "items": items,
     }
 
 

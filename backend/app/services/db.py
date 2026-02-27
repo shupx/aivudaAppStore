@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 import json
 import sqlite3
 from typing import Any
+
+import semver as _semver
 
 from fastapi import HTTPException
 
@@ -62,6 +65,7 @@ def init_db(*, admin_password_hash: str) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 app_id INTEGER NOT NULL,
                 version TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL,
                 published_at INTEGER,
                 created_at INTEGER NOT NULL,
@@ -102,6 +106,12 @@ def init_db(*, admin_password_hash: str) -> None:
             )
             """
         )
+
+        # --- Migrations for existing databases ---
+        # Add description column to app_version if missing
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(app_version)").fetchall()}
+        if "description" not in cols:
+            conn.execute("ALTER TABLE app_version ADD COLUMN description TEXT NOT NULL DEFAULT ''")
 
         user = conn.execute("SELECT id FROM developer_user WHERE username = 'admin'").fetchone()
         if not user:
@@ -155,6 +165,39 @@ def get_version_owned(conn: sqlite3.Connection, *, app_row: sqlite3.Row, version
     if not row:
         raise HTTPException(status_code=404, detail="版本不存在")
     return row
+
+
+def _semver_sort_key(version_str: str) -> tuple:
+    """Return a sortable key following semver precedence rules.
+
+    Valid semver versions (parsed by the ``semver`` package) get
+    priority ``(1, VersionInfo)`` so they sort above non-semver
+    strings which get ``(0, lowercase_string)``.
+    """
+    try:
+        ver = _semver.Version.parse(version_str.strip())
+        return (1, ver)
+    except ValueError:
+        return (0, version_str.lower())
+
+
+def pick_largest_published_version(conn: sqlite3.Connection, app_pk: int) -> sqlite3.Row | None:
+    """Pick the published version with the largest semver version number.
+
+    Valid semver versions are preferred; non-semver versions are sorted
+    last by string comparison.
+    """
+    rows = conn.execute(
+        """
+        SELECT *
+        FROM app_version
+        WHERE app_id = ? AND status = 'published'
+        """,
+        (app_pk,),
+    ).fetchall()
+    if not rows:
+        return None
+    return max(rows, key=lambda r: _semver_sort_key(r["version"]))
 
 
 def pick_latest_published_version(conn: sqlite3.Connection, app_pk: int) -> sqlite3.Row | None:
