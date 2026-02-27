@@ -10,7 +10,7 @@ FastAPI 后端，提供：
 
 ```bash
 python3 -m pip install --user -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload --workers 4
 ```
 
 ## 默认账号

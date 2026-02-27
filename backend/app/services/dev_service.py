@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import secrets
+import shutil
 import time
 import zipfile
 from pathlib import Path
@@ -97,109 +98,124 @@ async def upload_package(
         f'description: "{_yaml_quote(description_text)}"\n'
     )
 
-    with db_conn() as conn:
-        name_tag = _app_name_tag(name_text)
-        app_id_text = f"app_{name_tag}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(ts))}_{secrets.token_hex(3)}"
-        while conn.execute("SELECT 1 FROM app WHERE app_id = ?", (app_id_text,)).fetchone():
-            app_id_text = (
-                f"app_{name_tag}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(ts))}_{secrets.token_hex(3)}"
+    package_root: Path | None = None
+    work_dir: Path | None = None
+    persisted = False
+
+    try:
+        with db_conn() as conn:
+            name_tag = _app_name_tag(name_text)
+            app_id_text = f"app_{name_tag}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(ts))}_{secrets.token_hex(3)}"
+            while conn.execute("SELECT 1 FROM app WHERE app_id = ?", (app_id_text,)).fetchone():
+                app_id_text = (
+                    f"app_{name_tag}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(ts))}_{secrets.token_hex(3)}"
+                )
+
+            package_root = FILES_DIR / "apps" / app_id_text / version_text
+            work_dir = package_root / "_build"
+            app_dir = work_dir / "app"
+            scripts_dir = app_dir / "scripts"
+            assets_dir = app_dir / "assets"
+            app_dir.mkdir(parents=True, exist_ok=True)
+            scripts_dir.mkdir(parents=True, exist_ok=True)
+            assets_dir.mkdir(parents=True, exist_ok=True)
+
+            (app_dir / "app.yaml").write_text(yaml_text, encoding="utf-8")
+
+            tmp_zip = work_dir / "package.zip"
+            tmp_zip.write_bytes(await package_zip.read())
+            try:
+                with zipfile.ZipFile(tmp_zip) as zf:
+                    names = {_normalize_zip_name(name) for name in zf.namelist() if _normalize_zip_name(name)}
+            except zipfile.BadZipFile as exc:
+                raise HTTPException(status_code=400, detail="package.zip 不是有效的 zip 文件") from exc
+
+            prefix = _detect_package_prefix(names)
+            if prefix is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="package.zip 缺少必须文件：scripts/install.sh、scripts/uninstall.sh、scripts/start.sh、assets/icon.png",
+                )
+
+            _safe_extract_zip(tmp_zip, app_dir, prefix=prefix)
+
+            # 生成 app package.zip，供下载使用
+            package_root.mkdir(parents=True, exist_ok=True)
+            package_path = package_root / "package.zip"
+            with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                for path in app_dir.rglob("*"):
+                    if path.is_dir():
+                        continue
+                    zf.write(path, path.relative_to(work_dir))
+
+            # 将 app 记录写入数据库
+            cur = conn.execute(
+                """
+                INSERT INTO app (app_id, owner_user_id, name, description, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (app_id_text, user["user_id"], name_text, description_text, ts, ts),
+            )
+            app_pk = cur.lastrowid
+            create_audit_log(
+                conn,
+                app_id=app_pk,
+                actor_user_id=user["user_id"],
+                action="upload_package_create_app",
+                detail={"app_id": app_id_text},
             )
 
-        package_root = FILES_DIR / "apps" / app_id_text / version_text
-        work_dir = package_root / "_build"
-        app_dir = work_dir / "app"
-        scripts_dir = app_dir / "scripts"
-        assets_dir = app_dir / "assets"
-        app_dir.mkdir(parents=True, exist_ok=True)
-        scripts_dir.mkdir(parents=True, exist_ok=True)
-        assets_dir.mkdir(parents=True, exist_ok=True)
+            artifact_relpath = str(package_path.relative_to(FILES_DIR))
+            artifact_sha = file_sha256(package_path)
+            artifact_size = package_path.stat().st_size
 
-        (app_dir / "app.yaml").write_text(yaml_text, encoding="utf-8")
-
-        tmp_zip = work_dir / "package.zip"
-        tmp_zip.write_bytes(await package_zip.read())
-        try:
-            with zipfile.ZipFile(tmp_zip) as zf:
-                names = {_normalize_zip_name(name) for name in zf.namelist() if _normalize_zip_name(name)}
-        except zipfile.BadZipFile as exc:
-            raise HTTPException(status_code=400, detail="package.zip 不是有效的 zip 文件") from exc
-
-        prefix = _detect_package_prefix(names)
-        if prefix is None:
-            raise HTTPException(
-                status_code=400,
-                detail="package.zip 缺少必须文件：scripts/install.sh、scripts/uninstall.sh、scripts/start.sh、assets/icon.png",
+            cur = conn.execute(
+                """
+                INSERT INTO app_version (
+                    app_id, version, status, published_at, created_at, updated_at
+                ) VALUES (?, ?, 'published', ?, ?, ?)
+                """,
+                (
+                    app_pk,
+                    version_text,
+                    ts,
+                    ts,
+                    ts,
+                ),
             )
+            version_id = cur.lastrowid
 
-        _safe_extract_zip(tmp_zip, app_dir, prefix=prefix)
-
-        package_root.mkdir(parents=True, exist_ok=True)
-        package_path = package_root / "package.zip"
-        with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for path in app_dir.rglob("*"):
-                if path.is_dir():
-                    continue
-                zf.write(path, path.relative_to(work_dir))
-
-        cur = conn.execute(
-            """
-            INSERT INTO app (app_id, owner_user_id, name, description, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (app_id_text, user["user_id"], name_text, description_text, ts, ts),
-        )
-        app_pk = cur.lastrowid
-        create_audit_log(
-            conn,
-            app_id=app_pk,
-            actor_user_id=user["user_id"],
-            action="upload_package_create_app",
-            detail={"app_id": app_id_text},
-        )
-
-        artifact_relpath = str(package_path.relative_to(FILES_DIR))
-        artifact_sha = file_sha256(package_path)
-        artifact_size = package_path.stat().st_size
-
-        cur = conn.execute(
-            """
-            INSERT INTO app_version (
-                app_id, version, status, published_at, created_at, updated_at
-            ) VALUES (?, ?, 'published', ?, ?, ?)
-            """,
-            (
-                app_pk,
-                version_text,
-                ts,
-                ts,
-                ts,
-            ),
-        )
-        version_id = cur.lastrowid
-
-        conn.execute(
-            """
-            INSERT INTO app_target (
-                version_id, artifact_relpath, artifact_sha256, artifact_size, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                version_id,
-                artifact_relpath,
-                artifact_sha,
-                artifact_size,
-                ts,
-                ts,
-            ),
-        )
-        create_audit_log(
-            conn,
-            app_id=app_pk,
-            actor_user_id=user["user_id"],
-            action="upload_package_publish",
-            detail={"version": version_text},
-        )
-        conn.commit()
+            conn.execute(
+                """
+                INSERT INTO app_target (
+                    version_id, artifact_relpath, artifact_sha256, artifact_size, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    version_id,
+                    artifact_relpath,
+                    artifact_sha,
+                    artifact_size,
+                    ts,
+                    ts,
+                ),
+            )
+            create_audit_log(
+                conn,
+                app_id=app_pk,
+                actor_user_id=user["user_id"],
+                action="upload_package_publish",
+                detail={"version": version_text},
+            )
+            conn.commit()
+            persisted = True
+    finally:
+        if work_dir and work_dir.exists():
+            shutil.rmtree(work_dir, ignore_errors=True)
+            print(f"Cleaned up work_dir: {work_dir}")
+        if not persisted and package_root and package_root.exists():
+            shutil.rmtree(package_root, ignore_errors=True)
+            print(f"Cleaned up package_root: {package_root}")
 
     return {
         "ok": True,

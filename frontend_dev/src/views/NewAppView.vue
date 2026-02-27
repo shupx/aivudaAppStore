@@ -1,65 +1,21 @@
 <script setup>
-import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import ActionOutput from "../components/ActionOutput.vue";
 import AppTopBar from "../components/AppTopBar.vue";
-import { fetchMe, logout, session, uploadPackage } from "../services/api";
+import { useAppUpload } from "../composables/useAppUpload";
 
 const router = useRouter();
-const output = ref("");
-
-const form = {
-  name: ref(""),
-  version: ref("0.1.0"),
-  description: ref(""),
-};
-
-const files = {
-  packageZip: ref(null),
-};
-
-const sampleUrl = computed(() => {
-  const base = (session.baseUrl || "").replace(/\/$/, "");
-  return base ? `${base}/store/sample-package` : "/store/sample-package";
-});
-
-function setOutput(data) {
-  output.value = typeof data === "string" ? data : JSON.stringify(data, null, 2);
-}
-
-function bindFile(refKey, e) {
-  files[refKey].value = e.target.files && e.target.files.length ? e.target.files[0] : null;
-}
+const { output, form, sampleUrl, bindFile, submitPackage } = useAppUpload();
 
 async function submit() {
-  try {
-    await fetchMe();
-    if (!form.name.value.trim() || !form.version.value.trim()) {
-      setOutput("必须填写 name 与 version");
-      return;
-    }
-    if (!files.packageZip.value) {
-      setOutput("必须上传 package.zip");
-      return;
-    }
-
-    const fd = new FormData();
-    fd.append("name", form.name.value.trim());
-    fd.append("version", form.version.value.trim());
-    fd.append("description", form.description.value.trim());
-    fd.append("package_zip", files.packageZip.value);
-
-    const data = await uploadPackage(fd);
-    setOutput(data);
-    router.push(`/apps/${encodeURIComponent(data.app_id)}`);
-  } catch (err) {
-    if (String(err).includes("401")) {
-      logout();
+  await submitPackage({
+    onSuccess(data) {
+      router.push(`/apps/${encodeURIComponent(data.app_id)}`);
+    },
+    onAuthFail() {
       router.push("/login");
-      return;
-    }
-    setOutput(String(err));
-  }
+    },
+  });
 }
 </script>
 
@@ -80,7 +36,7 @@ async function submit() {
           <span class="file-label">应用材料压缩包（zip）</span>
           <input type="file" accept=".zip" @change="bindFile('packageZip', $event)" />
         </div>
-        <p class="hint full">必须包含：scripts/install.sh、scripts/uninstall.sh、scripts/start.sh、assets/icon.png。可包含 stop.sh、upgrade.sh、config/、README.md。</p>
+        <p class="hint full">必须包含：assets/icon.png。</p>
         <p class="hint full">
           <a class="link" :href="sampleUrl" target="_blank" rel="noreferrer">下载示例 package.zip</a>
         </p>

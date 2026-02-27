@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 
 from app.services.store_service import (
     store_app_detail as service_store_app_detail,
+    store_download_file as service_store_download_file,
     store_download_url as service_store_download_url,
     store_index as service_store_index,
     store_manifest as service_store_manifest,
@@ -41,3 +42,8 @@ async def store_manifest(
 @router.get("/apps/{app_id}/versions/{version}/download-url")
 async def store_download_url(app_id: str, version: str) -> dict[str, Any]:
     return service_store_download_url(app_id, version)
+
+
+@router.get("/apps/{app_id}/versions/{version}/download")
+async def store_download_file(app_id: str, version: str) -> FileResponse:
+    return service_store_download_file(app_id, version)

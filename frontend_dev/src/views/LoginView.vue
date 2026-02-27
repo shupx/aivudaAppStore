@@ -1,21 +1,16 @@
 <script setup>
-import { reactive } from "vue";
 import { useRouter } from "vue-router";
-import { login, session, setBaseUrl } from "../services/api";
+import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
-const form = reactive({ username: "admin", password: "admin123" });
-const status = reactive({ text: "未登录" });
+const { session, form, status, loginWithForm } = useAuth();
 
 async function onLogin() {
-  try {
-    setBaseUrl(session.baseUrl);
-    const data = await login(form.username, form.password);
-    status.text = `登录成功：${data.user.username}`;
-    router.push("/store");
-  } catch (err) {
-    status.text = String(err);
-  }
+  await loginWithForm({
+    onSuccess() {
+      router.push("/store");
+    },
+  });
 }
 </script>
 

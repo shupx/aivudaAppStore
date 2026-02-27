@@ -14,7 +14,7 @@ aivudaAppStore 现已拆分为独立的后端与前端目录。
 ```bash
 cd backend
 python3 -m pip install --user -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload --workers 4
 ```
 
 2. 启动前端（应用开发者界面）
