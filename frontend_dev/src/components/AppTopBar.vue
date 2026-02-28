@@ -2,6 +2,7 @@
 import { ref, onMounted, onBeforeUnmount } from "vue";
 import { useRouter } from "vue-router";
 import { logout, session } from "../services/api";
+import shoppingBagIcon from "../assets/icons/shopping-bag.svg";
 
 defineProps({
   title: { type: String, required: true },
@@ -63,11 +64,14 @@ onBeforeUnmount(() => {
       <button v-if="showBack" class="icon-btn" @click="goBack" title="返回">←</button>
     </div>
 
+    <button class="icon-btn store-bag-btn" @click="go('/store')" title="全部应用">
+      <img :src="shoppingBagIcon" alt="全部应用" width="22" height="22" />
+    </button>
+
     <div ref="accountWrap" class="account-wrap">
       <button class="icon-btn" @click="open = !open" title="账户">👤</button>
       <div v-if="open" class="account-menu">
         <div class="account-user">{{ session.user?.username }} ({{ session.user?.role }})</div>
-        <button @click="go('/store')">全部应用</button>
         <button @click="go('/me/new')">+ 上传新应用</button>
         <button class="danger" @click="doLogout">退出登录</button>
       </div>

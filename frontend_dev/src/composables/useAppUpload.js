@@ -2,7 +2,7 @@ import { computed, ref } from "vue";
 import { fetchMe, logout, session, uploadPackage } from "../services/api";
 
 export function useAppUpload() {
-  const output = ref("");
+  const output = ref({ text: "", isError: false });
 
   const form = {
     name: ref(""),
@@ -19,8 +19,9 @@ export function useAppUpload() {
     return base ? `${base}/store/sample-package` : "/store/sample-package";
   });
 
-  function setOutput(data) {
-    output.value = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  function setOutput(data, isError = false) {
+    const text = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+    output.value = { text, isError };
   }
 
   function bindFile(refKey, event) {
@@ -31,11 +32,11 @@ export function useAppUpload() {
     try {
       await fetchMe();
       if (!form.name.value.trim() || !form.version.value.trim()) {
-        setOutput("必须填写 name 与 version");
+        setOutput("必须填写 name 与 version", true);
         return null;
       }
       if (!files.packageZip.value) {
-        setOutput("必须上传 package.zip");
+        setOutput("必须上传 package.zip", true);
         return null;
       }
 
@@ -55,7 +56,7 @@ export function useAppUpload() {
         if (onAuthFail) onAuthFail(err);
         return null;
       }
-      setOutput(String(err));
+      setOutput(String(err), true);
       return null;
     }
   }

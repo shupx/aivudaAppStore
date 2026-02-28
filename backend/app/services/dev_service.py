@@ -116,7 +116,7 @@ async def _process_and_store_package(
         if prefix is None:
             raise HTTPException(
                 status_code=400,
-                detail="package.zip 缺少必须文件：scripts/install.sh、scripts/uninstall.sh、scripts/start.sh、assets/icon.png",
+                detail="package.zip 缺少必须文件",
             )
 
         _safe_extract_zip(tmp_zip, app_dir, prefix=prefix)
@@ -560,7 +560,7 @@ def delete_app(
 
     # Remove all files on disk
     app_dir = FILES_DIR / "apps" / app_id_text
-    if app_dir.exists():
+    if app_dir.exists() and app_dir.is_dir():
         shutil.rmtree(app_dir, ignore_errors=True)
 
     return {"ok": True, "app_id": app_id_text}
