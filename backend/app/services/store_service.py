@@ -12,8 +12,9 @@ from app.services.db import build_manifest, db_conn, get_targets, pick_largest_p
 from app.services.utils import now_ts
 
 SAMPLE_DIR = ROOT / "samples"
-SAMPLE_APP_DIR = SAMPLE_DIR / "app"
-SAMPLE_PACKAGE = SAMPLE_DIR / "sample-package.zip"
+SAMPLE_APP_DIR = SAMPLE_DIR / "aivuda-app-pkg-example"
+SAMPLE_PACKAGE_NAME = "aivuda-app-pkg-example.zip"
+SAMPLE_PACKAGE = SAMPLE_DIR / SAMPLE_PACKAGE_NAME
 
 
 def store_index() -> dict[str, Any]:
@@ -51,9 +52,13 @@ def store_sample_package() -> FileResponse:
         for path in SAMPLE_APP_DIR.rglob("*"):
             if path.is_dir():
                 continue
-            zf.write(path, path.relative_to(SAMPLE_DIR))
+            rel_path = path.relative_to(SAMPLE_APP_DIR)
+            rel_text = rel_path.as_posix()
+            if rel_text == ".git" or rel_text.startswith(".git/"):
+                continue
+            zf.write(path, rel_path)
 
-    return FileResponse(SAMPLE_PACKAGE, media_type="application/zip", filename="sample-package.zip")
+    return FileResponse(SAMPLE_PACKAGE, media_type="application/zip", filename=SAMPLE_PACKAGE_NAME)
 
 
 def store_app_detail(app_id: str) -> dict[str, Any]:

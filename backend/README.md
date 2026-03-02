@@ -32,4 +32,16 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 
 解析接口：`POST /dev/apps/manifest/parse-package`
 
-示例包下载：`GET /store/sample-package`。
+示例包下载：`GET /store/sample-package`（文件名：`aivuda-app-pkg-example.zip`）。
+
+## 示例包子模块
+
+`backend/samples/aivuda-app-pkg-example` 已改为 git 子模块，指向：
+
+- `git@gitee.com:aivuda_app_pkgs/aivuda-app-pkg-example.git`
+
+首次克隆或拉取后请执行：
+
+```bash
+git submodule update --init --recursive
+```
