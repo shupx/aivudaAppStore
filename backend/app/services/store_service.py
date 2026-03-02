@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
-from app.core.settings import FILES_DIR, ROOT
+from app.core.settings import APPSTORE_API_PREFIX, FILES_DIR, ROOT
 from app.services.db import build_manifest, db_conn, get_targets, pick_largest_published_version
 from app.services.utils import now_ts
 
@@ -81,7 +81,7 @@ def store_app_detail(app_id: str) -> dict[str, Any]:
         for v_row in all_versions:
             targets = get_targets(conn, version_id=v_row["id"])
             artifact_size = targets[0]["artifact_size"] if targets else 0
-            artifact_url = f"/files/{targets[0]['artifact_relpath']}" if targets and targets[0]["artifact_relpath"] else ""
+            artifact_url = f"{APPSTORE_API_PREFIX}/files/{targets[0]['artifact_relpath']}" if targets and targets[0]["artifact_relpath"] else ""
             versions.append({
                 "version": v_row["version"],
                 "description": v_row["description"],
@@ -161,7 +161,7 @@ def store_download_url(app_id: str, version: str) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail="No downloadable package for this version")
 
     return {
-        "url": f"/store/apps/{app_id}/versions/{version}/download",
+        "url": f"{APPSTORE_API_PREFIX}/store/apps/{app_id}/versions/{version}/download",
         "sha256": target["artifact_sha256"] or "",
         "size": target["artifact_size"] or 0,
     }

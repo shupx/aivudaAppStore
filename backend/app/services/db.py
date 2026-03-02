@@ -5,6 +5,8 @@ import json
 import sqlite3
 from typing import Any
 
+from app.core.settings import APPSTORE_API_PREFIX
+
 import semver as _semver
 
 from fastapi import HTTPException
@@ -232,7 +234,7 @@ def build_manifest(
         target = target_rows[0]
         relpath = target["artifact_relpath"]
         install_obj = {
-            "url": f"/files/{relpath}" if relpath else "",
+            "url": f"{APPSTORE_API_PREFIX}/files/{relpath}" if relpath else "",
             "sha256": target["artifact_sha256"] or "",
             "size": target["artifact_size"] or 0,
         }

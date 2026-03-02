@@ -2,9 +2,9 @@
 
 FastAPI 后端，提供：
 
-- 开发者管理接口：`/dev/*`
-- 公开商店接口：`/store/*`
-- 文件下载：`/files/*`
+- 开发者管理接口：`/aivuda_app_store/dev/*`
+- 公开商店接口：`/aivuda_app_store/store/*`
+- 文件下载：`/aivuda_app_store/files/*`
 
 ## 启动
 
@@ -30,9 +30,9 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 - 解析接口会返回包内文件树（最多 3 层）用于前端展示
 - 新应用提交阶段仅强制校验 `app_id`、`name`、`description`、`version`
 
-解析接口：`POST /dev/apps/manifest/parse-package`
+解析接口：`POST /aivuda_app_store/dev/apps/manifest/parse-package`
 
-示例包下载：`GET /store/sample-package`（文件名：`aivuda-app-pkg-example.zip`）。
+示例包下载：`GET /aivuda_app_store/store/sample-package`（文件名：`aivuda-app-pkg-example.zip`）。
 
 ## 示例包子模块
 

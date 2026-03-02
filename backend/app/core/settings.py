@@ -9,6 +9,7 @@ DB_PATH = DATA_DIR / "repo.db"
 
 # UI build output
 FRONTEND_DEV_UI_DIST_DIR = ROOT.parent / "frontend_dev" / "dist"
+APPSTORE_API_PREFIX = "/aivuda_app_store"
 
 SESSION_TTL_SECONDS = 12 * 60 * 60
 

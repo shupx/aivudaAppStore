@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.dev import router as dev_router
 from app.api.store import router as store_router
-from app.core.settings import FILES_DIR, FRONTEND_DEV_UI_DIST_DIR, ensure_storage_dirs
+from app.core.settings import APPSTORE_API_PREFIX, FILES_DIR, FRONTEND_DEV_UI_DIST_DIR, ensure_storage_dirs
 from app.services.auth import hash_password
 from app.services.db import init_db
 
@@ -28,10 +28,10 @@ def create_app() -> FastAPI:
     async def startup() -> None:
         init_db(admin_password_hash=hash_password("admin123"))
 
-    api.include_router(dev_router)
-    api.include_router(store_router)
+    api.include_router(dev_router, prefix=APPSTORE_API_PREFIX)
+    api.include_router(store_router, prefix=APPSTORE_API_PREFIX)
 
-    api.mount("/files", StaticFiles(directory=FILES_DIR), name="files") # for sample package file access, in production should use a proper static file server with better performance and security
+    api.mount(f"{APPSTORE_API_PREFIX}/files", StaticFiles(directory=FILES_DIR), name="files") # for sample package file access, in production should use a proper static file server with better performance and security
 
     if FRONTEND_DEV_UI_DIST_DIR.exists():
         # 开发环境提供静态文件(使得访问后端ip:port也能打开前端网页)，生产环境建议使用专门的静态文件服务器（如 nginx）来提供 UI 文件
