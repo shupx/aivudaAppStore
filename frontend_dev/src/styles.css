@@ -524,6 +524,61 @@ h2 {
   width: auto;
 }
 
+.field-item {
+  display: grid;
+  gap: 6px;
+}
+
+.field-name {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.input-with-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-action input {
+  flex: 1;
+}
+
+.input-action-btn {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  border-radius: 8px;
+}
+
+.input-hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.package-tree {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  max-height: 240px;
+  overflow: auto;
+}
+
+.package-tree-pre {
+  margin: 0;
+  padding: 0;
+  max-height: none;
+  background: transparent;
+  border-radius: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  white-space: pre;
+  word-break: normal;
+}
+
 .output-box {
   padding: 14px;
 }

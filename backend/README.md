@@ -26,6 +26,9 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 
 - 先解析包内 `manifest.yaml` 回填表单
 - 提交时统一用表单生成 `manifest.yaml` 并覆盖包内 manifest
+- 新应用上传流程中，解析阶段若缺失 `manifest.yaml` 会直接返回 400
+- 解析接口会返回包内文件树（最多 3 层）用于前端展示
+- 新应用提交阶段仅强制校验 `app_id`、`name`、`description`、`version`
 
 解析接口：`POST /dev/apps/manifest/parse-package`
 

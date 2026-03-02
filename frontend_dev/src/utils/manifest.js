@@ -121,3 +121,25 @@ export function buildManifestFromForm(form, t) {
 
   return manifest;
 }
+
+export function buildRequiredManifestFromForm(form, baseManifest, t) {
+  const appId = (form.appId || "").trim();
+  const name = (form.name || "").trim();
+  const description = (form.description || "").trim();
+  const version = (form.version || "").trim();
+
+  if (!appId) throw new Error(t("errors.requiredField", { field: t("fields.appId") }));
+  if (!name) throw new Error(t("errors.requiredField", { field: t("fields.name") }));
+  if (!description) throw new Error(t("errors.requiredField", { field: t("fields.description") }));
+  if (!version) throw new Error(t("errors.requiredField", { field: t("fields.version") }));
+
+  const manifest = {
+    ...(baseManifest && typeof baseManifest === "object" ? baseManifest : {}),
+    app_id: appId,
+    name,
+    description,
+    version,
+  };
+
+  return manifest;
+}

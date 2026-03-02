@@ -206,6 +206,62 @@ def _manifest_for_form(payload: dict[str, Any]) -> dict[str, Any]:
     return form
 
 
+def _build_package_entries(
+    names: set[str],
+    *,
+    prefix: str = "",
+    max_depth: int = 3,
+) -> list[dict[str, Any]]:
+    entries_map: dict[str, dict[str, Any]] = {}
+
+    for raw_name in sorted(names):
+        norm_name = _normalize_zip_name(raw_name)
+        if not norm_name:
+            continue
+        if prefix:
+            if not norm_name.startswith(prefix):
+                continue
+            norm_name = norm_name[len(prefix) :]
+        norm_name = norm_name.strip("/")
+        if not norm_name:
+            continue
+
+        parts = [part for part in norm_name.split("/") if part]
+        if not parts:
+            continue
+
+        limit = min(len(parts), max_depth)
+        for depth in range(1, limit + 1):
+            partial = parts[:depth]
+            is_last_visible = depth == limit
+            is_original_last = depth == len(parts)
+
+            if is_last_visible and is_original_last:
+                node_type = "file"
+                path = "/".join(partial)
+            else:
+                node_type = "dir"
+                path = "/".join(partial) + "/"
+
+            node = entries_map.get(path)
+            if node is None:
+                entries_map[path] = {
+                    "path": path,
+                    "depth": depth,
+                    "type": node_type,
+                    "truncated": False,
+                }
+                node = entries_map[path]
+            elif node_type == "dir":
+                node["type"] = "dir"
+
+            if depth == max_depth and len(parts) > max_depth:
+                node["type"] = "dir"
+                node["truncated"] = True
+
+    return sorted(entries_map.values(), key=lambda item: (item["depth"], item["path"]))
+
+
 def _resolve_inside_package(root: Path, rel_path: str, *, field: str) -> Path:
     candidate = Path(rel_path)
     if candidate.is_absolute():
@@ -222,7 +278,6 @@ def _resolve_inside_package(root: Path, rel_path: str, *, field: str) -> Path:
 def _validate_manifest_for_package(
     manifest: dict[str, Any],
     *,
-    app_dir: Path,
     expected_app_id: str | None = None,
     expected_version: str | None = None,
 ) -> None:
@@ -238,22 +293,13 @@ def _validate_manifest_for_package(
     if expected_version and version != expected_version:
         raise HTTPException(status_code=400, detail=f"manifest.version must be {expected_version}")
 
-    run = manifest.get("run")
-    if not isinstance(run, dict):
-        raise HTTPException(status_code=400, detail="manifest.run must be an object")
-    entrypoint = str(run.get("entrypoint") or "").strip()
-    if not entrypoint:
-        raise HTTPException(status_code=400, detail="manifest.run.entrypoint is required")
-    _resolve_inside_package(app_dir, entrypoint, field="run.entrypoint")
+    name = str(manifest.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="manifest.name is required")
 
-    for hook in ("pre_install", "pre_uninstall", "update_this_version"):
-        value = manifest.get(hook)
-        if value is None:
-            continue
-        text = str(value).strip()
-        if not text:
-            continue
-        _resolve_inside_package(app_dir, text, field=hook)
+    description = str(manifest.get("description") or "").strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="manifest.description is required")
 
 
 def _safe_extract_zip(zip_path: Path, dest_dir: Path, prefix: str = "") -> None:
@@ -316,7 +362,6 @@ async def _process_and_store_package(
         manifest = _normalize_manifest_payload(manifest_payload)
         _validate_manifest_for_package(
             manifest,
-            app_dir=app_dir,
             expected_app_id=expected_app_id,
             expected_version=expected_version,
         )
@@ -370,15 +415,10 @@ async def parse_package_manifest(*, package_zip: UploadFile) -> dict[str, Any]:
                 if not names:
                     raise HTTPException(status_code=400, detail="package.zip is empty")
                 manifest_member = _find_manifest_member(names)
+                prefix = _detect_package_prefix(names, manifest_member)
+                package_entries = _build_package_entries(names, prefix=prefix, max_depth=3)
                 if not manifest_member:
-                    return {
-                        "ok": True,
-                        "has_manifest": False,
-                        "found_path": None,
-                        "manifest": {},
-                        "normalized_manifest": _default_manifest_form(),
-                        "warnings": ["manifest.yaml was not found in the package; using empty form defaults."],
-                    }
+                    raise HTTPException(status_code=400, detail="manifest.yaml was not found in package.zip")
                 with zf.open(manifest_member) as fp:
                     raw_manifest = _parse_manifest_yaml(fp.read().decode("utf-8"))
         except zipfile.BadZipFile as exc:
@@ -390,6 +430,7 @@ async def parse_package_manifest(*, package_zip: UploadFile) -> dict[str, Any]:
             "found_path": manifest_member,
             "manifest": raw_manifest,
             "normalized_manifest": _manifest_for_form(raw_manifest),
+            "package_entries": package_entries,
             "warnings": [],
         }
     finally:
@@ -419,6 +460,10 @@ async def upload_package(
 
     if not app_id_text:
         raise HTTPException(status_code=400, detail="manifest.app_id is required")
+    if not name_text:
+        raise HTTPException(status_code=400, detail="manifest.name is required")
+    if not description_text:
+        raise HTTPException(status_code=400, detail="manifest.description is required")
     if not version_text:
         raise HTTPException(status_code=400, detail="manifest.version is required")
 

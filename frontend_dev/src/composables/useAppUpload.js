@@ -1,10 +1,119 @@
 import { computed, reactive, ref } from "vue";
 import { fetchMe, logout, parsePackageManifest, session, uploadPackage } from "../services/api";
-import { applyNormalizedManifest, buildManifestFromForm, createManifestForm } from "../utils/manifest";
+import { applyNormalizedManifest, buildRequiredManifestFromForm, createManifestForm } from "../utils/manifest";
+
+function sortPackageEntriesByDirectory(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+  return [...list].sort((left, right) => {
+    const leftPath = String(left?.path || "").replace(/\/+$/g, "");
+    const rightPath = String(right?.path || "").replace(/\/+$/g, "");
+
+    const leftParts = leftPath ? leftPath.split("/") : [];
+    const rightParts = rightPath ? rightPath.split("/") : [];
+    const minLen = Math.min(leftParts.length, rightParts.length);
+
+    for (let index = 0; index < minLen; index += 1) {
+      const segmentCmp = collator.compare(leftParts[index], rightParts[index]);
+      if (segmentCmp !== 0) return segmentCmp;
+    }
+
+    const leftType = left?.type === "dir" ? 0 : 1;
+    const rightType = right?.type === "dir" ? 0 : 1;
+    if (leftType !== rightType) return leftType - rightType;
+
+    return leftParts.length - rightParts.length;
+  });
+}
+
+function buildUbuntuTreeLines(entries, t) {
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  const root = { type: "dir", name: ".", children: new Map(), truncated: false };
+
+  const list = Array.isArray(entries) ? entries : [];
+  for (const entry of list) {
+    const rawPath = String(entry?.path || "").replace(/\/+$/g, "");
+    if (!rawPath) continue;
+
+    const parts = rawPath.split("/").filter(Boolean);
+    if (!parts.length) continue;
+
+    const entryType = entry?.type === "dir" ? "dir" : "file";
+    let current = root;
+
+    for (let index = 0; index < parts.length; index += 1) {
+      const name = parts[index];
+      const isLeaf = index === parts.length - 1;
+      const nodeType = isLeaf ? entryType : "dir";
+
+      if (!current.children.has(name)) {
+        current.children.set(name, { type: nodeType, name, children: new Map(), truncated: false });
+      }
+
+      const next = current.children.get(name);
+      if (nodeType === "dir") {
+        next.type = "dir";
+      }
+      if (isLeaf && entry?.truncated) {
+        next.truncated = true;
+      }
+      current = next;
+    }
+  }
+
+  const lines = ["."];
+
+  function walk(node, prefix) {
+    const children = Array.from(node.children.values()).sort((left, right) => {
+      const leftType = left.type === "dir" ? 0 : 1;
+      const rightType = right.type === "dir" ? 0 : 1;
+      if (leftType !== rightType) return leftType - rightType;
+      return collator.compare(left.name, right.name);
+    });
+
+    children.forEach((child, index) => {
+      const isLast = index === children.length - 1;
+      const branch = isLast ? "└── " : "├── ";
+      const suffix = child.type === "dir" ? "/" : "";
+      const truncated = child.truncated ? ` ${t("upload.treeTruncated")}` : "";
+      lines.push(`${prefix}${branch}${child.name}${suffix}${truncated}`);
+
+      if (child.type === "dir" && child.children.size > 0) {
+        const nextPrefix = `${prefix}${isLast ? "    " : "│   "}`;
+        walk(child, nextPrefix);
+      }
+    });
+  }
+
+  walk(root, "");
+  return lines;
+}
+
+function toAppIdSlug(text) {
+  const raw = String(text || "").trim().toLowerCase();
+  if (!raw) return "app";
+  return raw
+    .replace(/\s+/g, "_")
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32) || "app";
+}
+
+function twoDigits(value) {
+  return String(value).padStart(2, "0");
+}
 
 export function useAppUpload(t) {
   const output = ref({ text: "", isError: false });
   const parsingManifest = ref(false);
+  const submitting = ref(false);
+  const parsedReady = ref(false);
+  const packageEntries = ref([]);
+  const packageTreeLines = ref([]);
+  const manifestFoundPath = ref("");
+  const parsedManifestBase = ref({});
 
   const form = reactive(createManifestForm());
 
@@ -29,6 +138,11 @@ export function useAppUpload(t) {
   async function parseAndPrefillManifest(file) {
     if (!file) return;
     parsingManifest.value = true;
+    parsedReady.value = false;
+    packageEntries.value = [];
+    packageTreeLines.value = [];
+    manifestFoundPath.value = "";
+    parsedManifestBase.value = {};
     try {
       const fd = new FormData();
       fd.append("package_zip", file);
@@ -36,9 +150,19 @@ export function useAppUpload(t) {
       if (data?.normalized_manifest) {
         applyNormalizedManifest(form, data.normalized_manifest);
       }
-      if (Array.isArray(data?.warnings) && data.warnings.length) {
-        setOutput(data.warnings.join("\n"), false);
-      }
+      parsedManifestBase.value =
+        data?.manifest && typeof data.manifest === "object"
+          ? data.manifest
+          : data?.normalized_manifest && typeof data.normalized_manifest === "object"
+            ? data.normalized_manifest
+            : {};
+      packageEntries.value = sortPackageEntriesByDirectory(data?.package_entries);
+      packageTreeLines.value = buildUbuntuTreeLines(packageEntries.value, t);
+      manifestFoundPath.value = data?.found_path || "";
+      parsedReady.value = true;
+      setOutput(t("upload.parseSuccess"));
+    } catch (err) {
+      setOutput(String(err), true);
     } finally {
       parsingManifest.value = false;
     }
@@ -56,16 +180,21 @@ export function useAppUpload(t) {
         setOutput(t("upload.requiredPackage"), true);
         return null;
       }
+      if (!parsedReady.value) {
+        setOutput(t("upload.parseFirst"), true);
+        return null;
+      }
 
-      const manifest = buildManifestFromForm(form, t);
+      const manifest = buildRequiredManifestFromForm(form, parsedManifestBase.value, t);
 
       const fd = new FormData();
-      fd.append("name", manifest.name || manifest.app_id);
+      fd.append("name", manifest.name);
       fd.append("version", manifest.version);
-      fd.append("description", manifest.description || "");
+      fd.append("description", manifest.description);
       fd.append("manifest_json", JSON.stringify(manifest));
       fd.append("package_zip", files.packageZip.value);
 
+      submitting.value = true;
       const data = await uploadPackage(fd);
       setOutput(data);
       if (onSuccess) onSuccess(data);
@@ -78,14 +207,30 @@ export function useAppUpload(t) {
       }
       setOutput(String(err), true);
       return null;
+    } finally {
+      submitting.value = false;
     }
+  }
+
+  function generateAppId() {
+    const appName = toAppIdSlug(form.name || form.appId || "app");
+    const now = new Date();
+    const ymms = `${now.getFullYear()}${twoDigits(now.getMonth() + 1)}${twoDigits(now.getMinutes())}${twoDigits(now.getSeconds())}`;
+    const randomNum = Math.floor(Math.random() * 9000) + 1000;
+    form.appId = `app_${appName}_${ymms}_${randomNum}`;
   }
 
   return {
     output,
     parsingManifest,
+    submitting,
+    parsedReady,
+    packageEntries,
+    packageTreeLines,
+    manifestFoundPath,
     form,
     sampleUrl,
+    generateAppId,
     bindPackageZip,
     submitPackage,
   };
