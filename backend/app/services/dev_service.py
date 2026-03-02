@@ -580,6 +580,11 @@ async def upload_version(
             app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
             app_pk = app_row["id"]
 
+            expected_name = str(app_row["name"] or "").strip()
+            manifest_name = str(manifest.get("name") or "").strip()
+            if manifest_name != expected_name:
+                raise HTTPException(status_code=400, detail="manifest.name must match the existing app name")
+
             existing = conn.execute(
                 "SELECT 1 FROM app_version WHERE app_id = ? AND version = ?",
                 (app_pk, version_text),
@@ -683,6 +688,12 @@ async def modify_version(
         app_pk = app_row["id"]
         version_row = get_version_owned(conn, app_row=app_row, version=version)
         version_id = version_row["id"]
+
+        if manifest is not None:
+            expected_name = str(app_row["name"] or "").strip()
+            manifest_name = str(manifest.get("name") or "").strip()
+            if manifest_name != expected_name:
+                raise HTTPException(status_code=400, detail="manifest.name must match the existing app name")
 
         if description_text is not None:
             conn.execute(

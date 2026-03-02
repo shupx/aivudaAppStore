@@ -140,6 +140,10 @@
     "confirmDeleteMessage": "确定要永久删除版本 {version} 吗？此操作不可恢复，将同时删除安装包文件。",
     "manifestHint": "选择安装包后会自动解析并预填 manifest，可继续编辑。",
     "uploadManifest": "上传版本 manifest",
-    "editManifest": "替换包 manifest（仅当选择了新包时生效）"
+    "editManifest": "替换包 manifest（仅当选择了新包时生效）",
+    "editRequiredFieldsOnly": "替换安装包时，app 名称、app_id、version 均固定不可修改，仅允许修改 description。",
+    "appNameLockedHint": "上传新版本时 app 名称必须与当前应用一致，不能修改。",
+    "appIdLockedHint": "上传新版本时 app_id 必须与当前应用一致，不能修改。",
+    "versionLockedHint": "编辑该版本时 version 必须保持不变。"
   }
 }

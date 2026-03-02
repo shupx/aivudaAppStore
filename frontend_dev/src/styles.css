@@ -689,6 +689,8 @@ pre {
 .modal-card {
   width: min(520px, 92vw);
   padding: 22px;
+  max-height: 86vh;
+  overflow-y: auto;
 }
 
 .modal-card h2 {

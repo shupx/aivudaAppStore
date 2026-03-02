@@ -1,14 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import AppTopBar from "../components/AppTopBar.vue";
-import { useVersionManagement } from "../composables/useVersionManagement";
-import { useAppDownload } from "../composables/useAppDownload";
-import { useVersionSort } from "../composables/useVersionSort";
-import { applyNormalizedManifest, buildManifestFromForm, createManifestForm } from "../utils/manifest";
+import { useAppDetailPage } from "../composables/useAppDetailPage";
 import { formatSize, formatDate } from "../utils/format";
-import { session } from "../services/api";
 
 const route = useRoute();
 const router = useRouter();
@@ -17,194 +12,47 @@ const appId = route.params.appId;
 
 const {
   loading,
-  detail,
   operating,
   parsingManifest,
-  load,
-  parseManifestFromPackage,
-  doUploadVersion,
-  doModifyVersion,
-  doUnpublish,
-  doPublish,
-  doDelete,
-} = useVersionManagement(appId);
-
-const { downloading, progress: downloadProgress, downloadAppPackage } = useAppDownload();
-
-const showUploadDialog = ref(false);
-const uploadForm = ref({
-  description: "",
-  manifest: createManifestForm({ appId }),
-});
-const uploadFile = ref(null);
-const uploadSubmitting = ref(false);
-
-const showEditDialog = ref(false);
-const editForm = ref({
-  version: "",
-  description: "",
-  manifest: createManifestForm({ appId }),
-});
-const editFile = ref(null);
-const editSubmitting = ref(false);
-
-const confirmDialog = ref({ show: false, title: "", message: "", submitting: false, action: null });
-
-const appInfo = computed(() => detail.value?.app || null);
-const versions = computed(() => detail.value?.versions || []);
-const isOwnerOrAdmin = computed(() => {
-  if (!appInfo.value || !session.user) return false;
-  return session.user.role === "admin" || session.user.id === appInfo.value.owner_user_id;
-});
-
-const { sortBy, sortAsc, sortedVersions } = useVersionSort(versions);
-
-function isVersionBusy(ver) {
-  return operating.value.endsWith(`:${ver.version}`);
-}
-
-async function downloadVersion(version) {
-  try {
-    await downloadAppPackage(appId, version);
-  } catch (err) {
-    window.alert(String(err));
-  }
-}
-
-function openUploadDialog() {
-  uploadForm.value = {
-    description: "",
-    manifest: createManifestForm({ appId }),
-  };
-  uploadFile.value = null;
-  showUploadDialog.value = true;
-}
-
-async function submitUploadVersion() {
-  if (!uploadFile.value) {
-    window.alert(t("errors.mustChoosePackage"));
-    return;
-  }
-  uploadSubmitting.value = true;
-  try {
-    const manifest = buildManifestFromForm(uploadForm.value.manifest, t);
-    if (!manifest.description && uploadForm.value.description.trim()) {
-      manifest.description = uploadForm.value.description.trim();
-    }
-    await doUploadVersion(manifest, uploadFile.value);
-    showUploadDialog.value = false;
-  } catch (err) {
-    window.alert(String(err));
-  } finally {
-    uploadSubmitting.value = false;
-  }
-}
-
-function openEditDialog(ver) {
-  editForm.value = {
-    version: ver.version,
-    description: ver.description || "",
-    manifest: createManifestForm({
-      appId,
-      version: ver.version,
-      description: ver.description || "",
-    }),
-  };
-  editFile.value = null;
-  showEditDialog.value = true;
-}
-
-async function submitEditVersion() {
-  editSubmitting.value = true;
-  try {
-    let manifest = null;
-    if (editFile.value) {
-      manifest = buildManifestFromForm(editForm.value.manifest, t);
-      manifest.version = editForm.value.version;
-      manifest.app_id = appId;
-      if (!manifest.description && editForm.value.description.trim()) {
-        manifest.description = editForm.value.description.trim();
-      }
-    }
-    await doModifyVersion(editForm.value.version, editForm.value.description, editFile.value, manifest);
-    showEditDialog.value = false;
-  } catch (err) {
-    window.alert(String(err));
-  } finally {
-    editSubmitting.value = false;
-  }
-}
-
-function openConfirm(title, message, action) {
-  confirmDialog.value = { show: true, title, message, submitting: false, action };
-}
-
-async function runConfirm() {
-  confirmDialog.value.submitting = true;
-  try {
-    await confirmDialog.value.action();
-    confirmDialog.value.show = false;
-  } catch (err) {
-    window.alert(String(err));
-  } finally {
-    confirmDialog.value.submitting = false;
-  }
-}
-
-function confirmUnpublish(ver) {
-  openConfirm(
-    t("detail.confirmUnpublishTitle"),
-    t("detail.confirmUnpublishMessage", { version: ver.version }),
-    () => doUnpublish(ver.version)
-  );
-}
-
-function confirmDelete(ver) {
-  openConfirm(
-    t("detail.confirmDeleteTitle"),
-    t("detail.confirmDeleteMessage", { version: ver.version }),
-    () => doDelete(ver.version)
-  );
-}
-
-async function handlePublish(ver) {
-  try {
-    await doPublish(ver.version);
-  } catch (err) {
-    window.alert(String(err));
-  }
-}
-
-async function onFileChange(target, event) {
-  const file = event.target.files?.[0] || null;
-  if (target === "upload") {
-    uploadFile.value = file;
-    if (!file) return;
-    const data = await parseManifestFromPackage(file);
-    if (data?.normalized_manifest) {
-      applyNormalizedManifest(uploadForm.value.manifest, data.normalized_manifest);
-      if (!uploadForm.value.manifest.appId) uploadForm.value.manifest.appId = appId;
-    }
-    return;
-  }
-
-  if (target === "edit") {
-    editFile.value = file;
-    if (!file) return;
-    const data = await parseManifestFromPackage(file);
-    if (data?.normalized_manifest) {
-      applyNormalizedManifest(editForm.value.manifest, data.normalized_manifest);
-      editForm.value.manifest.appId = appId;
-      editForm.value.manifest.version = editForm.value.version;
-    }
-  }
-}
-
-onMounted(async () => {
-  const result = await load();
-  if (result === null && !detail.value) {
-    router.push("/login");
-  }
+  uploadParsedReady,
+  uploadPackageEntries,
+  uploadPackageTreeLines,
+  uploadManifestFoundPath,
+  downloading,
+  downloadProgress,
+  showUploadDialog,
+  uploadForm,
+  uploadSubmitting,
+  showEditDialog,
+  editForm,
+  editSubmitting,
+  editHasPackageSelected,
+  editParsedReady,
+  editPackageEntries,
+  editPackageTreeLines,
+  editManifestFoundPath,
+  confirmDialog,
+  appInfo,
+  versions,
+  isOwnerOrAdmin,
+  sortBy,
+  sortAsc,
+  sortedVersions,
+  isVersionBusy,
+  downloadVersion,
+  openUploadDialog,
+  submitUploadVersion,
+  openEditDialog,
+  submitEditVersion,
+  runConfirm,
+  confirmUnpublish,
+  confirmDelete,
+  handlePublish,
+  onFileChange,
+} = useAppDetailPage({
+  appId,
+  t,
+  onAuthFail: () => router.push("/login"),
 });
 </script>
 
@@ -312,70 +160,49 @@ onMounted(async () => {
     <div class="modal-card card">
       <h2>{{ t("detail.uploadDialogTitle") }}</h2>
       <form class="stack" @submit.prevent="submitUploadVersion">
-        <label>
-          {{ t("fields.appId") }}
-          <input v-model="uploadForm.manifest.appId" required />
-        </label>
-        <label>
-          {{ t("fields.name") }}
-          <input v-model="uploadForm.manifest.name" />
-        </label>
-        <label>
-          {{ t("fields.version") }}
-          <input v-model="uploadForm.manifest.version" required />
-        </label>
-        <label>
-          {{ t("fields.description") }}
-          <textarea v-model="uploadForm.manifest.description" rows="2" />
-        </label>
-        <label>
-          {{ t("fields.entrypoint") }}
-          <input v-model="uploadForm.manifest.entrypoint" required />
-        </label>
-        <label>
-          {{ t("fields.runArgs") }}
-          <textarea v-model="uploadForm.manifest.argsText" rows="2" />
-        </label>
+        <h3>{{ t("upload.stepPackage") }}</h3>
 
         <div class="file-row">
           <span class="file-label">{{ t("detail.packageLabel") }}</span>
           <input type="file" accept=".zip" @change="onFileChange('upload', $event)" />
         </div>
         <p class="hint" v-if="parsingManifest">{{ t("upload.parsing") }}</p>
-        <p class="hint">{{ t("detail.manifestHint") }}</p>
+        <p class="hint">{{ t("upload.hintManifest") }}</p>
 
-        <h3>{{ t("detail.uploadManifest") }}</h3>
-        <label>
-          {{ t("fields.icon") }}
-          <input v-model="uploadForm.manifest.icon" />
-        </label>
-        <label>
-          {{ t("fields.preInstall") }}
-          <input v-model="uploadForm.manifest.preInstall" />
-        </label>
-        <label>
-          {{ t("fields.preUninstall") }}
-          <input v-model="uploadForm.manifest.preUninstall" />
-        </label>
-        <label>
-          {{ t("fields.updateThisVersion") }}
-          <input v-model="uploadForm.manifest.updateThisVersion" />
-        </label>
-        <label>
-          {{ t("fields.defaultConfig") }}
-          <textarea v-model="uploadForm.manifest.defaultConfigText" rows="3" />
-        </label>
-        <label>
-          {{ t("fields.configSchema") }}
-          <textarea v-model="uploadForm.manifest.configSchemaText" rows="3" />
-        </label>
-        <label>
-          {{ t("fields.extraManifest") }}
-          <textarea v-model="uploadForm.manifest.extraManifestText" rows="3" />
-        </label>
+        <template v-if="uploadParsedReady">
+          <h3>{{ t("upload.stepManifest") }}</h3>
+          <p class="hint">{{ t("upload.manifestPath", { path: uploadManifestFoundPath || 'manifest.yaml' }) }}</p>
+          <p class="hint">{{ t("upload.requiredFieldsOnly") }}</p>
+
+          <label class="field-item">
+            <span class="field-name">{{ t("fields.name") }}</span>
+            <input v-model="uploadForm.manifest.name" :placeholder="t('fields.name')" readonly disabled />
+            <span class="input-hint">{{ t("detail.appNameLockedHint") }}</span>
+          </label>
+          <label class="field-item">
+            <span class="field-name">{{ t("fields.appId") }}</span>
+            <input v-model="uploadForm.manifest.appId" :placeholder="t('fields.appId')" readonly disabled />
+            <span class="input-hint">{{ t("detail.appIdLockedHint") }}</span>
+          </label>
+          <label class="field-item">
+            <span class="field-name">{{ t("fields.version") }}</span>
+            <input v-model="uploadForm.manifest.version" :placeholder="t('upload.versionPlaceholder')" required />
+            <span class="input-hint">{{ t("upload.versionHint") }}</span>
+          </label>
+          <label class="field-item">
+            <span class="field-name">{{ t("fields.description") }}</span>
+            <textarea v-model="uploadForm.manifest.description" rows="2" required />
+          </label>
+
+          <h3>{{ t("upload.treeTitle") }}</h3>
+          <div class="package-tree" v-if="uploadPackageEntries.length">
+            <pre class="package-tree-pre">{{ uploadPackageTreeLines.join('\n') }}</pre>
+          </div>
+          <p class="hint" v-else>{{ t("upload.treeEmpty") }}</p>
+        </template>
 
         <div class="btnrow">
-          <button type="submit" :disabled="uploadSubmitting">
+          <button type="submit" :disabled="uploadSubmitting || !uploadParsedReady">
             {{ uploadSubmitting ? t("detail.uploading") : t("detail.uploadNow") }}
           </button>
           <button type="button" @click="showUploadDialog = false" :disabled="uploadSubmitting">{{ t("common.cancel") }}</button>
@@ -392,57 +219,45 @@ onMounted(async () => {
           {{ t("detail.descriptionLabel") }}
           <textarea v-model="editForm.description" :placeholder="t('detail.descriptionLabel')" rows="3" />
         </label>
+
+        <h3>{{ t("upload.stepPackage") }}</h3>
         <div class="file-row">
           <span class="file-label">{{ t("detail.replacePackage") }}</span>
           <input type="file" accept=".zip" @change="onFileChange('edit', $event)" />
         </div>
         <p class="hint" v-if="parsingManifest">{{ t("upload.parsing") }}</p>
-        <p class="hint">{{ t("detail.manifestHint") }}</p>
+        <p class="hint">{{ t("upload.hintManifest") }}</p>
 
-        <h3>{{ t("detail.editManifest") }}</h3>
-        <label>
-          {{ t("fields.entrypoint") }}
-          <input v-model="editForm.manifest.entrypoint" />
-        </label>
-        <label>
-          {{ t("fields.runArgs") }}
-          <textarea v-model="editForm.manifest.argsText" rows="2" />
-        </label>
-        <label>
-          {{ t("fields.description") }}
-          <textarea v-model="editForm.manifest.description" rows="2" />
-        </label>
-        <label>
-          {{ t("fields.icon") }}
-          <input v-model="editForm.manifest.icon" />
-        </label>
-        <label>
-          {{ t("fields.preInstall") }}
-          <input v-model="editForm.manifest.preInstall" />
-        </label>
-        <label>
-          {{ t("fields.preUninstall") }}
-          <input v-model="editForm.manifest.preUninstall" />
-        </label>
-        <label>
-          {{ t("fields.updateThisVersion") }}
-          <input v-model="editForm.manifest.updateThisVersion" />
-        </label>
-        <label>
-          {{ t("fields.defaultConfig") }}
-          <textarea v-model="editForm.manifest.defaultConfigText" rows="3" />
-        </label>
-        <label>
-          {{ t("fields.configSchema") }}
-          <textarea v-model="editForm.manifest.configSchemaText" rows="3" />
-        </label>
-        <label>
-          {{ t("fields.extraManifest") }}
-          <textarea v-model="editForm.manifest.extraManifestText" rows="3" />
-        </label>
+        <template v-if="editParsedReady">
+          <h3>{{ t("upload.stepManifest") }}</h3>
+          <p class="hint">{{ t("upload.manifestPath", { path: editManifestFoundPath || 'manifest.yaml' }) }}</p>
+          <p class="hint">{{ t("detail.editRequiredFieldsOnly") }}</p>
+
+          <label class="field-item">
+            <span class="field-name">{{ t("fields.name") }}</span>
+            <input v-model="editForm.manifest.name" :placeholder="t('fields.name')" readonly disabled />
+            <span class="input-hint">{{ t("detail.appNameLockedHint") }}</span>
+          </label>
+          <label class="field-item">
+            <span class="field-name">{{ t("fields.appId") }}</span>
+            <input v-model="editForm.manifest.appId" :placeholder="t('fields.appId')" readonly disabled />
+            <span class="input-hint">{{ t("detail.appIdLockedHint") }}</span>
+          </label>
+          <label class="field-item">
+            <span class="field-name">{{ t("fields.version") }}</span>
+            <input v-model="editForm.manifest.version" :placeholder="t('upload.versionPlaceholder')" readonly disabled />
+            <span class="input-hint">{{ t("detail.versionLockedHint") }}</span>
+          </label>
+
+          <h3>{{ t("upload.treeTitle") }}</h3>
+          <div class="package-tree" v-if="editPackageEntries.length">
+            <pre class="package-tree-pre">{{ editPackageTreeLines.join('\n') }}</pre>
+          </div>
+          <p class="hint" v-else>{{ t("upload.treeEmpty") }}</p>
+        </template>
 
         <div class="btnrow">
-          <button type="submit" :disabled="editSubmitting">
+          <button type="submit" :disabled="editSubmitting || (editHasPackageSelected && !editParsedReady)">
             {{ editSubmitting ? t("detail.saving") : t("common.save") }}
           </button>
           <button type="button" @click="showEditDialog = false" :disabled="editSubmitting">{{ t("common.cancel") }}</button>

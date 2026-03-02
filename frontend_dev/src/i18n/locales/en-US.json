@@ -140,6 +140,10 @@
     "confirmDeleteMessage": "Delete version {version} permanently? This cannot be undone and package files will be removed.",
     "manifestHint": "After selecting a package, manifest is parsed and prefilled for editing.",
     "uploadManifest": "Manifest for new version",
-    "editManifest": "Manifest for replacement package (applied only when package is selected)"
+    "editManifest": "Manifest for replacement package (applied only when package is selected)",
+    "editRequiredFieldsOnly": "When replacing package, app name, app_id and version are fixed. Only description can be modified.",
+    "appNameLockedHint": "App name must remain the same as this app and cannot be changed when uploading a new version.",
+    "appIdLockedHint": "app_id must stay the same as this app and cannot be changed when uploading a new version.",
+    "versionLockedHint": "Version must stay the same when editing this version."
   }
 }
