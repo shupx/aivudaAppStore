@@ -1,0 +1,18 @@
+app_id: hello-world-sample
+name: Hello World Sample
+description: Sample app package for aivudaOS-compatible manifest flow.
+version: 0.1.0
+run:
+  entrypoint: scripts/start.sh
+  args: []
+icon: assets/icon.png
+pre_install: scripts/install.sh
+pre_uninstall: scripts/uninstall.sh
+update_this_version: scripts/upgrade.sh
+default_config:
+  greeting: hello world
+config_schema:
+  type: object
+  properties:
+    greeting:
+      type: string

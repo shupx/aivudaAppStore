@@ -10,7 +10,7 @@ FastAPI 后端，提供：
 
 ```bash
 python3 -m pip install --user -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload --workers 4
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 ```
 
 ## 默认账号
@@ -21,5 +21,12 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload --workers 4
 ## 安装包规范
 
 见 `backend/docs/app-package-spec.md`。
+
+上传与编辑版本时：
+
+- 先解析包内 `manifest.yaml` 回填表单
+- 提交时统一用表单生成 `manifest.yaml` 并覆盖包内 manifest
+
+解析接口：`POST /dev/apps/manifest/parse-package`
 
 示例包下载：`GET /store/sample-package`。

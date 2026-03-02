@@ -1,4 +1,6 @@
 <script setup>
+import { useI18n } from "vue-i18n";
+
 defineProps({
   title: { type: String, required: true },
   subtitle: { type: String, default: "" },
@@ -9,6 +11,8 @@ defineProps({
 });
 
 defineEmits(["click", "download", "delete"]);
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -17,21 +21,21 @@ defineEmits(["click", "download", "delete"]);
       <h3 :title="title">{{ title }}</h3>
     </div>
     <p class="sub">{{ subtitle }}</p>
-    <p class="desc" :title="description || '暂无描述'">{{ description || "暂无描述" }}</p>
+    <p class="desc" :title="description || t('card.noDescription')">{{ description || t("card.noDescription") }}</p>
     <div class="download-btn-wrapper">
       <div v-if="showDelete" class="action-btn-wrap">
-        <button class="app-delete" type="button" :disabled="deleting" @click.stop="$emit('delete')" title="删除应用">
+        <button class="app-delete" type="button" :disabled="deleting" @click.stop="$emit('delete')" :title="t('card.deleteApp')">
           <span v-if="deleting">...</span>
           <span v-else>🗑</span>
         </button>
-        <div class="delete-tooltip">危险：永久删除此应用</div>
+        <div class="delete-tooltip">{{ t("card.deleteDanger") }}</div>
       </div>
       <div class="action-btn-wrap">
-        <button class="app-download" type="button" :disabled="downloading" @click.stop="$emit('download')" title="下载应用">
+        <button class="app-download" type="button" :disabled="downloading" @click.stop="$emit('download')" :title="t('card.downloadApp')">
           <span v-if="downloading">...</span>
           <span v-else>⬇</span>
         </button>
-        <div class="download-tooltip">{{ downloading ? "下载中..." : "下载安装包" }}</div>
+        <div class="download-tooltip">{{ downloading ? t("card.downloading") : t("card.downloadPackage") }}</div>
       </div>
     </div>
   </article>

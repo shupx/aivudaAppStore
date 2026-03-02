@@ -1,12 +1,14 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import AppCard from "../components/AppCard.vue";
 import AppTopBar from "../components/AppTopBar.vue";
 import { fetchMe, fetchStoreApps, logout, deleteApp, session } from "../services/api";
 import { useAppDownload } from "../composables/useAppDownload";
 
 const router = useRouter();
+const { t } = useI18n();
 const loading = ref(true);
 const apps = ref([]);
 const downloadingId = ref("");
@@ -48,11 +50,11 @@ async function downloadPackage(item) {
 async function handleDeleteApp(item) {
   const name = item.manifest?.name || item.app_id;
   const confirmed = window.confirm(
-    `⚠️ 危险操作！\n\n确定要永久删除应用「${name}」吗？\n\n此操作将删除该应用的所有版本、安装包文件和全部记录，且不可恢复！`
+    t("store.confirmDeleteAppMessage", { name })
   );
   if (!confirmed) return;
   const doubleConfirm = window.confirm(
-    `再次确认：删除应用「${name}」后无法恢复，是否继续？`
+    t("store.confirmDeleteAppAgain", { name })
   );
   if (!doubleConfirm) return;
   deletingId.value = item.app_id;
@@ -72,18 +74,18 @@ onMounted(load);
 <template>
   <div class="bg"></div>
   <section class="page-wrap">
-    <AppTopBar title="应用商店" subtitle="全部应用" :show-back="false" />
+    <AppTopBar :title="t('store.title')" :subtitle="t('store.subtitle')" :show-back="false" />
 
     <section class="card list-wrap">
-      <h2>应用列表</h2>
-      <div v-if="loading" class="hint">加载中...</div>
-      <div v-else-if="apps.length === 0" class="hint">暂无应用</div>
+      <h2>{{ t("store.appList") }}</h2>
+      <div v-if="loading" class="hint">{{ t("store.loading") }}</div>
+      <div v-else-if="apps.length === 0" class="hint">{{ t("store.empty") }}</div>
       <div v-else class="card-grid">
         <AppCard
           v-for="item in apps"
           :key="item.app_id"
           :title="item.manifest?.name || item.app_id"
-          :subtitle="`版本 ${item.version}`"
+          :subtitle="t('store.versionPrefix', { version: item.version })"
           :description="item.manifest?.description || ''"
           :downloading="downloadingId === `${item.app_id}:${item.version}`"
           :show-delete="isAdmin()"

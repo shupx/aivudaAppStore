@@ -9,6 +9,7 @@ from app.services.dev_service import (
     delete_app,
     delete_version,
     modify_version,
+    parse_package_manifest,
     publish_version,
     unpublish_version,
     upload_package,
@@ -34,6 +35,7 @@ async def dev_upload_package(
     name: str = Form(""),
     version: str = Form(""),
     description: str = Form(""),
+    manifest_json: str = Form(""),
     package_zip: UploadFile = File(...),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
@@ -43,8 +45,18 @@ async def dev_upload_package(
         name=name,
         version=version,
         description=description,
+        manifest_json=manifest_json,
         package_zip=package_zip,
     )
+
+
+@router.post("/apps/manifest/parse-package")
+async def dev_parse_package_manifest(
+    package_zip: UploadFile = File(...),
+    authorization: str | None = Header(default=None),
+) -> dict[str, Any]:
+    require_user(authorization)
+    return await parse_package_manifest(package_zip=package_zip)
 
 
 @router.post("/apps/{app_id}/versions")
@@ -52,6 +64,7 @@ async def dev_upload_version(
     app_id: str,
     version: str = Form(""),
     description: str = Form(""),
+    manifest_json: str = Form(""),
     package_zip: UploadFile = File(...),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
@@ -61,6 +74,7 @@ async def dev_upload_version(
         app_id_text=app_id,
         version=version,
         description=description,
+        manifest_json=manifest_json,
         package_zip=package_zip,
     )
 
@@ -70,6 +84,7 @@ async def dev_modify_version(
     app_id: str,
     version: str,
     description: str = Form(None),
+    manifest_json: str | None = Form(None),
     package_zip: UploadFile | None = File(None),
     authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
@@ -79,6 +94,7 @@ async def dev_modify_version(
         app_id_text=app_id,
         version=version,
         description=description,
+        manifest_json=manifest_json,
         package_zip=package_zip,
     )
 

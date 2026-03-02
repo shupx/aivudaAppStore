@@ -1,14 +1,12 @@
-import { computed, ref } from "vue";
-import { fetchMe, logout, session, uploadPackage } from "../services/api";
+import { computed, reactive, ref } from "vue";
+import { fetchMe, logout, parsePackageManifest, session, uploadPackage } from "../services/api";
+import { applyNormalizedManifest, buildManifestFromForm, createManifestForm } from "../utils/manifest";
 
-export function useAppUpload() {
+export function useAppUpload(t) {
   const output = ref({ text: "", isError: false });
+  const parsingManifest = ref(false);
 
-  const form = {
-    name: ref(""),
-    version: ref("0.1.0"),
-    description: ref(""),
-  };
+  const form = reactive(createManifestForm());
 
   const files = {
     packageZip: ref(null),
@@ -28,22 +26,44 @@ export function useAppUpload() {
     files[refKey].value = event.target.files && event.target.files.length ? event.target.files[0] : null;
   }
 
+  async function parseAndPrefillManifest(file) {
+    if (!file) return;
+    parsingManifest.value = true;
+    try {
+      const fd = new FormData();
+      fd.append("package_zip", file);
+      const data = await parsePackageManifest(fd);
+      if (data?.normalized_manifest) {
+        applyNormalizedManifest(form, data.normalized_manifest);
+      }
+      if (Array.isArray(data?.warnings) && data.warnings.length) {
+        setOutput(data.warnings.join("\n"), false);
+      }
+    } finally {
+      parsingManifest.value = false;
+    }
+  }
+
+  async function bindPackageZip(event) {
+    bindFile("packageZip", event);
+    await parseAndPrefillManifest(files.packageZip.value);
+  }
+
   async function submitPackage({ onSuccess, onAuthFail } = {}) {
     try {
       await fetchMe();
-      if (!form.name.value.trim() || !form.version.value.trim()) {
-        setOutput("必须填写 name 与 version", true);
-        return null;
-      }
       if (!files.packageZip.value) {
-        setOutput("必须上传 package.zip", true);
+        setOutput(t("upload.requiredPackage"), true);
         return null;
       }
 
+      const manifest = buildManifestFromForm(form, t);
+
       const fd = new FormData();
-      fd.append("name", form.name.value.trim());
-      fd.append("version", form.version.value.trim());
-      fd.append("description", form.description.value.trim());
+      fd.append("name", manifest.name || manifest.app_id);
+      fd.append("version", manifest.version);
+      fd.append("description", manifest.description || "");
+      fd.append("manifest_json", JSON.stringify(manifest));
       fd.append("package_zip", files.packageZip.value);
 
       const data = await uploadPackage(fd);
@@ -63,9 +83,10 @@ export function useAppUpload() {
 
   return {
     output,
+    parsingManifest,
     form,
     sampleUrl,
-    bindFile,
+    bindPackageZip,
     submitPackage,
   };
 }

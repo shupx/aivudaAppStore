@@ -43,7 +43,7 @@ def store_index() -> dict[str, Any]:
 
 def store_sample_package() -> FileResponse:
     if not SAMPLE_APP_DIR.exists():
-        raise HTTPException(status_code=404, detail="示例包目录不存在")
+        raise HTTPException(status_code=404, detail="Sample package directory not found")
 
     # @TODO: 可以预先生成好示例包，避免每次请求都生成一次
     SAMPLE_DIR.mkdir(parents=True, exist_ok=True)
@@ -60,7 +60,7 @@ def store_app_detail(app_id: str) -> dict[str, Any]:
     with db_conn() as conn:
         app_row = conn.execute("SELECT * FROM app WHERE app_id = ?", (app_id,)).fetchone()
         if not app_row:
-            raise HTTPException(status_code=404, detail="app 不存在")
+            raise HTTPException(status_code=404, detail="App not found")
 
         all_versions = conn.execute(
             """
@@ -121,14 +121,14 @@ def store_manifest(app_id: str, version: str) -> dict[str, Any]:
             (app_id,),
         ).fetchone()
         if not app_row:
-            raise HTTPException(status_code=404, detail="app 不存在")
+            raise HTTPException(status_code=404, detail="App not found")
 
         version_row = conn.execute(
             "SELECT * FROM app_version WHERE app_id = ? AND version = ?",
             (app_row["id"], version),
         ).fetchone()
         if not version_row or version_row["status"] != "published":
-            raise HTTPException(status_code=404, detail="版本不存在或未发布")
+            raise HTTPException(status_code=404, detail="Version not found or not published")
 
         targets = get_targets(conn, version_id=version_row["id"])
 
@@ -139,21 +139,21 @@ def store_download_url(app_id: str, version: str) -> dict[str, Any]:
     with db_conn() as conn:
         app_row = conn.execute("SELECT id FROM app WHERE app_id = ?", (app_id,)).fetchone()
         if not app_row:
-            raise HTTPException(status_code=404, detail="app 不存在")
+            raise HTTPException(status_code=404, detail="App not found")
 
         version_row = conn.execute(
             "SELECT id, status FROM app_version WHERE app_id = ? AND version = ?",
             (app_row["id"], version),
         ).fetchone()
         if not version_row or version_row["status"] != "published":
-            raise HTTPException(status_code=404, detail="版本不存在或未发布")
+            raise HTTPException(status_code=404, detail="Version not found or not published")
 
         target = conn.execute(
             "SELECT * FROM app_target WHERE version_id = ?",
             (version_row["id"],),
         ).fetchone()
         if not target:
-            raise HTTPException(status_code=404, detail="该版本没有可用安装包")
+            raise HTTPException(status_code=404, detail="No downloadable package for this version")
 
     return {
         "url": f"/store/apps/{app_id}/versions/{version}/download",
@@ -166,21 +166,21 @@ def store_download_file(app_id: str, version: str) -> FileResponse:
     with db_conn() as conn:
         app_row = conn.execute("SELECT id FROM app WHERE app_id = ?", (app_id,)).fetchone()
         if not app_row:
-            raise HTTPException(status_code=404, detail="app 不存在")
+            raise HTTPException(status_code=404, detail="App not found")
 
         version_row = conn.execute(
             "SELECT id, status FROM app_version WHERE app_id = ? AND version = ?",
             (app_row["id"], version),
         ).fetchone()
         if not version_row or version_row["status"] != "published":
-            raise HTTPException(status_code=404, detail="版本不存在或未发布")
+            raise HTTPException(status_code=404, detail="Version not found or not published")
 
         target = conn.execute(
             "SELECT * FROM app_target WHERE version_id = ?",
             (version_row["id"],),
         ).fetchone()
         if not target:
-            raise HTTPException(status_code=404, detail="该版本没有可用安装包")
+            raise HTTPException(status_code=404, detail="No downloadable package for this version")
 
     relpath = Path(str(target["artifact_relpath"]))
     package_path = (FILES_DIR / relpath).resolve()
@@ -188,9 +188,9 @@ def store_download_file(app_id: str, version: str) -> FileResponse:
     try:
         package_path.relative_to(files_root)
     except ValueError:
-        raise HTTPException(status_code=400, detail="安装包路径非法")
+        raise HTTPException(status_code=400, detail="Invalid package path")
     if not package_path.exists() or not package_path.is_file():
-        raise HTTPException(status_code=404, detail="安装包文件不存在")
+        raise HTTPException(status_code=404, detail="Package file not found")
 
     download_name = f"{app_id}-{version}.zip"
     return FileResponse(package_path, media_type="application/zip", filename=download_name)

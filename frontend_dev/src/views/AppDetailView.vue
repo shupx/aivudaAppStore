@@ -1,22 +1,27 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import AppTopBar from "../components/AppTopBar.vue";
 import { useVersionManagement } from "../composables/useVersionManagement";
 import { useAppDownload } from "../composables/useAppDownload";
 import { useVersionSort } from "../composables/useVersionSort";
+import { applyNormalizedManifest, buildManifestFromForm, createManifestForm } from "../utils/manifest";
 import { formatSize, formatDate } from "../utils/format";
 import { session } from "../services/api";
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const appId = route.params.appId;
 
 const {
   loading,
   detail,
   operating,
+  parsingManifest,
   load,
+  parseManifestFromPackage,
   doUploadVersion,
   doModifyVersion,
   doUnpublish,
@@ -26,22 +31,25 @@ const {
 
 const { downloading, progress: downloadProgress, downloadAppPackage } = useAppDownload();
 
-// --- Upload new version dialog ---
 const showUploadDialog = ref(false);
-const uploadForm = ref({ version: "", description: "" });
+const uploadForm = ref({
+  description: "",
+  manifest: createManifestForm({ appId }),
+});
 const uploadFile = ref(null);
 const uploadSubmitting = ref(false);
 
-// --- Edit version dialog ---
 const showEditDialog = ref(false);
-const editForm = ref({ version: "", description: "" });
+const editForm = ref({
+  version: "",
+  description: "",
+  manifest: createManifestForm({ appId }),
+});
 const editFile = ref(null);
 const editSubmitting = ref(false);
 
-// --- Confirm dialog ---
 const confirmDialog = ref({ show: false, title: "", message: "", submitting: false, action: null });
 
-// --- Computed ---
 const appInfo = computed(() => detail.value?.app || null);
 const versions = computed(() => detail.value?.versions || []);
 const isOwnerOrAdmin = computed(() => {
@@ -49,15 +57,12 @@ const isOwnerOrAdmin = computed(() => {
   return session.user.role === "admin" || session.user.id === appInfo.value.owner_user_id;
 });
 
-// --- Sorting ---
 const { sortBy, sortAsc, sortedVersions } = useVersionSort(versions);
 
-// --- Helpers ---
 function isVersionBusy(ver) {
   return operating.value.endsWith(`:${ver.version}`);
 }
 
-// --- Actions ---
 async function downloadVersion(version) {
   try {
     await downloadAppPackage(appId, version);
@@ -67,27 +72,26 @@ async function downloadVersion(version) {
 }
 
 function openUploadDialog() {
-  uploadForm.value = { version: "", description: "" };
+  uploadForm.value = {
+    description: "",
+    manifest: createManifestForm({ appId }),
+  };
   uploadFile.value = null;
   showUploadDialog.value = true;
 }
 
 async function submitUploadVersion() {
-  if (!uploadForm.value.version.trim()) {
-    window.alert("必须填写版本号");
-    return;
-  }
   if (!uploadFile.value) {
-    window.alert("必须选择安装包（zip）");
+    window.alert(t("errors.mustChoosePackage"));
     return;
   }
   uploadSubmitting.value = true;
   try {
-    await doUploadVersion(
-      uploadForm.value.version.trim(),
-      uploadForm.value.description.trim(),
-      uploadFile.value
-    );
+    const manifest = buildManifestFromForm(uploadForm.value.manifest, t);
+    if (!manifest.description && uploadForm.value.description.trim()) {
+      manifest.description = uploadForm.value.description.trim();
+    }
+    await doUploadVersion(manifest, uploadFile.value);
     showUploadDialog.value = false;
   } catch (err) {
     window.alert(String(err));
@@ -97,7 +101,15 @@ async function submitUploadVersion() {
 }
 
 function openEditDialog(ver) {
-  editForm.value = { version: ver.version, description: ver.description || "" };
+  editForm.value = {
+    version: ver.version,
+    description: ver.description || "",
+    manifest: createManifestForm({
+      appId,
+      version: ver.version,
+      description: ver.description || "",
+    }),
+  };
   editFile.value = null;
   showEditDialog.value = true;
 }
@@ -105,7 +117,16 @@ function openEditDialog(ver) {
 async function submitEditVersion() {
   editSubmitting.value = true;
   try {
-    await doModifyVersion(editForm.value.version, editForm.value.description, editFile.value);
+    let manifest = null;
+    if (editFile.value) {
+      manifest = buildManifestFromForm(editForm.value.manifest, t);
+      manifest.version = editForm.value.version;
+      manifest.app_id = appId;
+      if (!manifest.description && editForm.value.description.trim()) {
+        manifest.description = editForm.value.description.trim();
+      }
+    }
+    await doModifyVersion(editForm.value.version, editForm.value.description, editFile.value, manifest);
     showEditDialog.value = false;
   } catch (err) {
     window.alert(String(err));
@@ -132,16 +153,16 @@ async function runConfirm() {
 
 function confirmUnpublish(ver) {
   openConfirm(
-    "下架版本",
-    `确定要下架版本 ${ver.version} 吗？下架后用户将无法从商店下载此版本，可随时重新发布。`,
+    t("detail.confirmUnpublishTitle"),
+    t("detail.confirmUnpublishMessage", { version: ver.version }),
     () => doUnpublish(ver.version)
   );
 }
 
 function confirmDelete(ver) {
   openConfirm(
-    "永久删除版本",
-    `确定要永久删除版本 ${ver.version} 吗？此操作不可恢复，将同时删除安装包文件。`,
+    t("detail.confirmDeleteTitle"),
+    t("detail.confirmDeleteMessage", { version: ver.version }),
     () => doDelete(ver.version)
   );
 }
@@ -154,10 +175,29 @@ async function handlePublish(ver) {
   }
 }
 
-function onFileChange(target, event) {
+async function onFileChange(target, event) {
   const file = event.target.files?.[0] || null;
-  if (target === "upload") uploadFile.value = file;
-  else if (target === "edit") editFile.value = file;
+  if (target === "upload") {
+    uploadFile.value = file;
+    if (!file) return;
+    const data = await parseManifestFromPackage(file);
+    if (data?.normalized_manifest) {
+      applyNormalizedManifest(uploadForm.value.manifest, data.normalized_manifest);
+      if (!uploadForm.value.manifest.appId) uploadForm.value.manifest.appId = appId;
+    }
+    return;
+  }
+
+  if (target === "edit") {
+    editFile.value = file;
+    if (!file) return;
+    const data = await parseManifestFromPackage(file);
+    if (data?.normalized_manifest) {
+      applyNormalizedManifest(editForm.value.manifest, data.normalized_manifest);
+      editForm.value.manifest.appId = appId;
+      editForm.value.manifest.version = editForm.value.version;
+    }
+  }
 }
 
 onMounted(async () => {
@@ -171,38 +211,36 @@ onMounted(async () => {
 <template>
   <div class="bg"></div>
   <section class="page-wrap">
-    <AppTopBar title="应用详情" :subtitle="appId" />
+    <AppTopBar :title="t('detail.title')" :subtitle="appId" />
 
-    <!-- App header card -->
     <section class="card list-wrap detail-header">
       <div class="detail-header-content">
         <div>
-          <p class="app-name">{{ appInfo?.name || "未知应用" }}</p>
+          <p class="app-name">{{ appInfo?.name || t("detail.unknownApp") }}</p>
           <p class="sub">{{ appId }}</p>
           <p class="sub" v-if="appInfo?.description">{{ appInfo.description }}</p>
         </div>
         <button v-if="isOwnerOrAdmin" @click="openUploadDialog" :disabled="!!operating">
-          + 上传新版本
+          {{ t("detail.uploadVersion") }}
         </button>
       </div>
     </section>
 
-    <!-- Version list -->
     <section class="card list-wrap">
       <div class="version-list-header">
-        <h2>版本列表（{{ versions.length }}）</h2>
+        <h2>{{ t("detail.versionList", { count: versions.length }) }}</h2>
         <div class="sort-controls">
-          <span class="sort-label">排序：</span>
-          <button :class="{ active: sortBy === 'version' }" @click="sortBy = 'version'">版本号</button>
-          <button :class="{ active: sortBy === 'published' }" @click="sortBy = 'published'">发布时间</button>
-          <button :class="{ active: sortBy === 'updated' }" @click="sortBy = 'updated'">更新时间</button>
-          <button class="sort-dir" @click="sortAsc = !sortAsc" :title="sortAsc ? '升序' : '降序'">
-            {{ sortAsc ? '↑' : '↓' }}
+          <span class="sort-label">{{ t("detail.sort") }}</span>
+          <button :class="{ active: sortBy === 'version' }" @click="sortBy = 'version'">{{ t("detail.sortVersion") }}</button>
+          <button :class="{ active: sortBy === 'published' }" @click="sortBy = 'published'">{{ t("detail.sortPublished") }}</button>
+          <button :class="{ active: sortBy === 'updated' }" @click="sortBy = 'updated'">{{ t("detail.sortUpdated") }}</button>
+          <button class="sort-dir" @click="sortAsc = !sortAsc" :title="sortAsc ? t('detail.asc') : t('detail.desc')">
+            {{ sortAsc ? "↑" : "↓" }}
           </button>
         </div>
       </div>
-      <div v-if="loading" class="hint">加载中...</div>
-      <div v-else-if="versions.length === 0" class="hint">暂无版本，请上传第一个版本。</div>
+      <div v-if="loading" class="hint">{{ t("detail.loading") }}</div>
+      <div v-else-if="versions.length === 0" class="hint">{{ t("detail.empty") }}</div>
       <div v-else class="version-list">
         <article
           class="version-item"
@@ -214,57 +252,55 @@ onMounted(async () => {
             <h3>
               <span>{{ ver.version }}</span>
               <span class="chip" :class="ver.status === 'published' ? '' : 'chip-unpublished'">
-                {{ ver.status === "published" ? "已发布" : "已下架" }}
+                {{ ver.status === "published" ? t("detail.published") : t("detail.unpublished") }}
               </span>
             </h3>
             <span class="version-size">{{ formatSize(ver.artifact_size) }}</span>
           </div>
 
           <div class="version-meta">
-            <span v-if="ver.published_at">发布于 {{ formatDate(ver.published_at) }}</span>
-            <span>更新于 {{ formatDate(ver.updated_at) }}</span>
+            <span v-if="ver.published_at">{{ t("detail.publishedAt", { time: formatDate(ver.published_at) }) }}</span>
+            <span>{{ t("detail.updatedAt", { time: formatDate(ver.updated_at) }) }}</span>
           </div>
           <div v-if="ver.description" class="version-desc">{{ ver.description }}</div>
 
-          <!-- Owner / admin actions -->
           <div v-if="isOwnerOrAdmin" class="version-actions">
             <button
               v-if="ver.status === 'published'"
               @click="downloadVersion(ver.version)"
               :disabled="downloading || isVersionBusy(ver)"
             >
-              <span v-if="downloading">⏳ {{ downloadProgress }}%</span>
-              <span v-else>⬇ 下载</span>
+              <span v-if="downloading">{{ t("detail.downloadBusy", { progress: downloadProgress }) }}</span>
+              <span v-else>{{ t("detail.download") }}</span>
             </button>
             <button @click="openEditDialog(ver)" :disabled="!!operating">
-              编辑
+              {{ t("detail.edit") }}
             </button>
             <button
               v-if="ver.status === 'published'"
               @click="confirmUnpublish(ver)"
               :disabled="isVersionBusy(ver)"
             >
-              下架
+              {{ t("detail.unpublish") }}
             </button>
             <button
               v-else
               @click="handlePublish(ver)"
               :disabled="isVersionBusy(ver)"
             >
-              重新发布
+              {{ t("detail.republish") }}
             </button>
             <button class="danger" @click="confirmDelete(ver)" :disabled="isVersionBusy(ver)">
-              删除
+              {{ t("detail.delete") }}
             </button>
           </div>
 
-          <!-- Public: download published only -->
           <div v-else-if="ver.status === 'published'" class="version-actions">
             <button
               @click="downloadVersion(ver.version)"
               :disabled="downloading"
             >
-              ⬇ 下载
+              {{ t("detail.download") }}
             </button>
           </div>
         </article>
@@ -272,66 +308,158 @@ onMounted(async () => {
     </section>
   </section>
 
-  <!-- Upload new version dialog -->
   <div v-if="showUploadDialog" class="modal-overlay" @click.self="showUploadDialog = false">
     <div class="modal-card card">
-      <h2>上传新版本</h2>
+      <h2>{{ t("detail.uploadDialogTitle") }}</h2>
       <form class="stack" @submit.prevent="submitUploadVersion">
         <label>
-          版本号
-          <input v-model="uploadForm.version" placeholder="如 0.1.1, 0.1.1-alpha, rolling, 不推荐其他方式" required />
+          {{ t("fields.appId") }}
+          <input v-model="uploadForm.manifest.appId" required />
         </label>
         <label>
-          描述（可选，留空则沿用应用当前描述）
-          <textarea v-model="uploadForm.description" placeholder="版本描述" rows="3" />
+          {{ t("fields.name") }}
+          <input v-model="uploadForm.manifest.name" />
         </label>
+        <label>
+          {{ t("fields.version") }}
+          <input v-model="uploadForm.manifest.version" required />
+        </label>
+        <label>
+          {{ t("fields.description") }}
+          <textarea v-model="uploadForm.manifest.description" rows="2" />
+        </label>
+        <label>
+          {{ t("fields.entrypoint") }}
+          <input v-model="uploadForm.manifest.entrypoint" required />
+        </label>
+        <label>
+          {{ t("fields.runArgs") }}
+          <textarea v-model="uploadForm.manifest.argsText" rows="2" />
+        </label>
+
         <div class="file-row">
-          <span class="file-label">应用安装包（zip）</span>
+          <span class="file-label">{{ t("detail.packageLabel") }}</span>
           <input type="file" accept=".zip" @change="onFileChange('upload', $event)" />
         </div>
+        <p class="hint" v-if="parsingManifest">{{ t("upload.parsing") }}</p>
+        <p class="hint">{{ t("detail.manifestHint") }}</p>
+
+        <h3>{{ t("detail.uploadManifest") }}</h3>
+        <label>
+          {{ t("fields.icon") }}
+          <input v-model="uploadForm.manifest.icon" />
+        </label>
+        <label>
+          {{ t("fields.preInstall") }}
+          <input v-model="uploadForm.manifest.preInstall" />
+        </label>
+        <label>
+          {{ t("fields.preUninstall") }}
+          <input v-model="uploadForm.manifest.preUninstall" />
+        </label>
+        <label>
+          {{ t("fields.updateThisVersion") }}
+          <input v-model="uploadForm.manifest.updateThisVersion" />
+        </label>
+        <label>
+          {{ t("fields.defaultConfig") }}
+          <textarea v-model="uploadForm.manifest.defaultConfigText" rows="3" />
+        </label>
+        <label>
+          {{ t("fields.configSchema") }}
+          <textarea v-model="uploadForm.manifest.configSchemaText" rows="3" />
+        </label>
+        <label>
+          {{ t("fields.extraManifest") }}
+          <textarea v-model="uploadForm.manifest.extraManifestText" rows="3" />
+        </label>
+
         <div class="btnrow">
           <button type="submit" :disabled="uploadSubmitting">
-            {{ uploadSubmitting ? "上传中..." : "上传" }}
+            {{ uploadSubmitting ? t("detail.uploading") : t("detail.uploadNow") }}
           </button>
-          <button type="button" @click="showUploadDialog = false" :disabled="uploadSubmitting">取消</button>
+          <button type="button" @click="showUploadDialog = false" :disabled="uploadSubmitting">{{ t("common.cancel") }}</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Edit version dialog -->
   <div v-if="showEditDialog" class="modal-overlay" @click.self="showEditDialog = false">
     <div class="modal-card card">
-      <h2>编辑版本 {{ editForm.version }}</h2>
+      <h2>{{ t("detail.editDialogTitle", { version: editForm.version }) }}</h2>
       <form class="stack" @submit.prevent="submitEditVersion">
         <label>
-          版本描述
-          <textarea v-model="editForm.description" placeholder="版本描述" rows="3" />
+          {{ t("detail.descriptionLabel") }}
+          <textarea v-model="editForm.description" :placeholder="t('detail.descriptionLabel')" rows="3" />
         </label>
         <div class="file-row">
-          <span class="file-label">替换安装包（可选，不选则保留原包）</span>
+          <span class="file-label">{{ t("detail.replacePackage") }}</span>
           <input type="file" accept=".zip" @change="onFileChange('edit', $event)" />
         </div>
+        <p class="hint" v-if="parsingManifest">{{ t("upload.parsing") }}</p>
+        <p class="hint">{{ t("detail.manifestHint") }}</p>
+
+        <h3>{{ t("detail.editManifest") }}</h3>
+        <label>
+          {{ t("fields.entrypoint") }}
+          <input v-model="editForm.manifest.entrypoint" />
+        </label>
+        <label>
+          {{ t("fields.runArgs") }}
+          <textarea v-model="editForm.manifest.argsText" rows="2" />
+        </label>
+        <label>
+          {{ t("fields.description") }}
+          <textarea v-model="editForm.manifest.description" rows="2" />
+        </label>
+        <label>
+          {{ t("fields.icon") }}
+          <input v-model="editForm.manifest.icon" />
+        </label>
+        <label>
+          {{ t("fields.preInstall") }}
+          <input v-model="editForm.manifest.preInstall" />
+        </label>
+        <label>
+          {{ t("fields.preUninstall") }}
+          <input v-model="editForm.manifest.preUninstall" />
+        </label>
+        <label>
+          {{ t("fields.updateThisVersion") }}
+          <input v-model="editForm.manifest.updateThisVersion" />
+        </label>
+        <label>
+          {{ t("fields.defaultConfig") }}
+          <textarea v-model="editForm.manifest.defaultConfigText" rows="3" />
+        </label>
+        <label>
+          {{ t("fields.configSchema") }}
+          <textarea v-model="editForm.manifest.configSchemaText" rows="3" />
+        </label>
+        <label>
+          {{ t("fields.extraManifest") }}
+          <textarea v-model="editForm.manifest.extraManifestText" rows="3" />
+        </label>
+
         <div class="btnrow">
           <button type="submit" :disabled="editSubmitting">
-            {{ editSubmitting ? "保存中..." : "保存" }}
+            {{ editSubmitting ? t("detail.saving") : t("common.save") }}
           </button>
-          <button type="button" @click="showEditDialog = false" :disabled="editSubmitting">取消</button>
+          <button type="button" @click="showEditDialog = false" :disabled="editSubmitting">{{ t("common.cancel") }}</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Confirm dialog -->
   <div v-if="confirmDialog.show" class="modal-overlay" @click.self="confirmDialog.show = false">
     <div class="modal-card card">
       <h2>{{ confirmDialog.title }}</h2>
       <p>{{ confirmDialog.message }}</p>
       <div class="btnrow">
         <button class="danger" @click="runConfirm" :disabled="confirmDialog.submitting">
-          {{ confirmDialog.submitting ? "处理中..." : "确认" }}
+          {{ confirmDialog.submitting ? t("common.processing") : t("common.confirm") }}
         </button>
-        <button @click="confirmDialog.show = false" :disabled="confirmDialog.submitting">取消</button>
+        <button @click="confirmDialog.show = false" :disabled="confirmDialog.submitting">{{ t("common.cancel") }}</button>
       </div>
     </div>
   </div>

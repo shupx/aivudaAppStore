@@ -1,4 +1,5 @@
 import { reactive } from "vue";
+import { i18n } from "../i18n";
 
 export const session = reactive({
   baseUrl: localStorage.getItem("appstore_base_url") || "http://127.0.0.1:9001",
@@ -23,7 +24,7 @@ export function buildApiUrl(path) {
 export async function request(path, { method = "GET", body = null, auth = false } = {}) {
   const headers = {};
   if (auth) {
-    if (!session.token) throw new Error("请先登录");
+    if (!session.token) throw new Error(i18n.global.t("common.loginFirst"));
     headers.Authorization = `Bearer ${session.token}`;
   }
 
@@ -76,6 +77,10 @@ export async function fetchStoreDownloadUrl(appId, version) {
 
 export async function uploadPackage(formData) {
   return request("/dev/apps/upload-package", { method: "POST", body: formData, auth: true });
+}
+
+export async function parsePackageManifest(formData) {
+  return request("/dev/apps/manifest/parse-package", { method: "POST", body: formData, auth: true });
 }
 
 export async function uploadVersion(appId, formData) {

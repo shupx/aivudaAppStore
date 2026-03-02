@@ -17,11 +17,11 @@ def hash_password(password: str) -> str:
 
 def require_user(authorization: str | None) -> dict[str, int | str]:
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="缺少 Bearer token")
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
 
     token = authorization[len("Bearer ") :].strip()
     if not token:
-        raise HTTPException(status_code=401, detail="token 为空")
+        raise HTTPException(status_code=401, detail="Token is empty")
 
     now = now_ts()
     with db_conn() as conn:
@@ -36,11 +36,11 @@ def require_user(authorization: str | None) -> dict[str, int | str]:
         ).fetchone()
 
         if not row:
-            raise HTTPException(status_code=401, detail="无效 token")
+            raise HTTPException(status_code=401, detail="Invalid token")
         if row["expires_at"] < now:
             conn.execute("DELETE FROM dev_session WHERE token = ?", (token,))
             conn.commit()
-            raise HTTPException(status_code=401, detail="token 已过期")
+            raise HTTPException(status_code=401, detail="Token has expired")
 
     return {
         "user_id": row["user_id"],
@@ -57,7 +57,7 @@ def login(username: str, password: str) -> dict[str, object]:
             (username, pwd_hash),
         ).fetchone()
         if not row:
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+            raise HTTPException(status_code=401, detail="Invalid username or password")
 
         token = secrets.token_urlsafe(32)
         created_at = now_ts()

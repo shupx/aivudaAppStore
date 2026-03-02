@@ -14,7 +14,7 @@ aivudaAppStore 现已拆分为独立的后端与前端目录。
 ```bash
 cd backend
 python3 -m pip install --user -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload --workers 4
+python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 ```
 
 2. 启动前端（应用开发者界面）
@@ -33,3 +33,9 @@ npm run dev
 
 - 用户名: `admin`
 - 密码: `admin123`
+
+## 安装包说明（manifest.yaml）
+
+- AppStore 已切换为 aivudaOS 对齐的 `manifest.yaml` 规范。
+- 上传新应用与上传/编辑版本时，会先自动解析包内 manifest 回填表单。
+- 提交后，后端会使用表单内容重新生成并覆盖安装包中的 `manifest.yaml`。

@@ -151,9 +151,9 @@ def get_app_owned(conn: sqlite3.Connection, *, app_id_text: str, user: dict[str,
         (app_id_text,),
     ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="app 不存在")
+        raise HTTPException(status_code=404, detail="App not found")
     if user["role"] != "admin" and row["owner_user_id"] != user["user_id"]:
-        raise HTTPException(status_code=403, detail="无权限操作该 app")
+        raise HTTPException(status_code=403, detail="Permission denied for this app")
     return row
 
 
@@ -163,7 +163,7 @@ def get_version_owned(conn: sqlite3.Connection, *, app_row: sqlite3.Row, version
         (app_row["id"], version),
     ).fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="版本不存在")
+        raise HTTPException(status_code=404, detail="Version not found")
     return row
 
 

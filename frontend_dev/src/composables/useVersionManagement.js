@@ -2,8 +2,9 @@ import { ref } from "vue";
 import {
   fetchMe,
   fetchStoreAppDetail,
-  uploadVersion,
+  parsePackageManifest,
   modifyVersion,
+  uploadVersion,
   unpublishVersion,
   publishVersion,
   deleteVersion,
@@ -15,6 +16,7 @@ export function useVersionManagement(appId) {
   const detail = ref(null);
   const operating = ref("");
   const error = ref("");
+  const parsingManifest = ref(false);
 
   async function load() {
     loading.value = true;
@@ -35,12 +37,24 @@ export function useVersionManagement(appId) {
     }
   }
 
-  async function doUploadVersion(version, description, packageZipFile) {
-    operating.value = `upload:${version}`;
+  async function parseManifestFromPackage(file) {
+    parsingManifest.value = true;
     try {
       const fd = new FormData();
-      fd.append("version", version);
-      fd.append("description", description || "");
+      fd.append("package_zip", file);
+      return await parsePackageManifest(fd);
+    } finally {
+      parsingManifest.value = false;
+    }
+  }
+
+  async function doUploadVersion(manifest, packageZipFile) {
+    operating.value = `upload:${manifest.version}`;
+    try {
+      const fd = new FormData();
+      fd.append("version", manifest.version);
+      fd.append("description", manifest.description || "");
+      fd.append("manifest_json", JSON.stringify(manifest));
       fd.append("package_zip", packageZipFile);
       await uploadVersion(appId, fd);
       await load();
@@ -49,7 +63,7 @@ export function useVersionManagement(appId) {
     }
   }
 
-  async function doModifyVersion(version, description, packageZipFile) {
+  async function doModifyVersion(version, description, packageZipFile, manifest = null) {
     operating.value = `modify:${version}`;
     try {
       const fd = new FormData();
@@ -57,6 +71,9 @@ export function useVersionManagement(appId) {
         fd.append("description", description);
       }
       if (packageZipFile) {
+        if (manifest) {
+          fd.append("manifest_json", JSON.stringify(manifest));
+        }
         fd.append("package_zip", packageZipFile);
       }
       await modifyVersion(appId, version, fd);
@@ -100,8 +117,10 @@ export function useVersionManagement(appId) {
     loading,
     detail,
     operating,
+    parsingManifest,
     error,
     load,
+    parseManifestFromPackage,
     doUploadVersion,
     doModifyVersion,
     doUnpublish,

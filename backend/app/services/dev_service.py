@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+import json
 import re
-import secrets
 import shutil
 import sqlite3
-import time
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
+import yaml
 
 from app.core.settings import FILES_DIR
 from app.services.db import create_audit_log, db_conn, get_app_owned, get_version_owned
@@ -37,6 +37,225 @@ def _normalize_zip_name(name: str) -> str:
     return name
 
 
+def _known_manifest_fields() -> set[str]:
+    return {
+        "app_id",
+        "name",
+        "description",
+        "version",
+        "run",
+        "icon",
+        "pre_install",
+        "pre_uninstall",
+        "update_this_version",
+        "default_config",
+        "config_schema",
+        "extra_manifest",
+    }
+
+
+def _default_manifest_form() -> dict[str, Any]:
+    return {
+        "app_id": "",
+        "name": "",
+        "description": "",
+        "version": "0.1.0",
+        "run": {"entrypoint": "", "args": []},
+        "icon": "",
+        "pre_install": "",
+        "pre_uninstall": "",
+        "update_this_version": "",
+        "default_config": {},
+        "config_schema": None,
+        "extra_manifest": {},
+    }
+
+
+def _find_manifest_member(names: set[str]) -> str | None:
+    for name in ("manifest.yaml", "manifest.yml"):
+        if name in names:
+            return name
+
+    for name in sorted(names):
+        if name.endswith("/manifest.yaml") or name.endswith("/manifest.yml"):
+            if name.count("/") == 1:
+                return name
+    return None
+
+
+def _detect_package_prefix(names: set[str], manifest_member: str | None) -> str:
+    if manifest_member:
+        if "/" in manifest_member:
+            return manifest_member.rsplit("/", 1)[0] + "/"
+        return ""
+
+    if any("/" not in name for name in names):
+        return ""
+
+    prefixes = {name.split("/", 1)[0] for name in names if "/" in name}
+    if len(prefixes) == 1:
+        return f"{next(iter(prefixes))}/"
+    return ""
+
+
+def _parse_manifest_yaml(text: str) -> dict[str, Any]:
+    try:
+        payload = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise HTTPException(status_code=400, detail=f"manifest.yaml is not valid YAML: {exc}") from exc
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="manifest.yaml top-level value must be an object")
+    return payload
+
+
+def _normalize_manifest_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(payload)
+    extra_manifest = merged.pop("extra_manifest", None)
+    if extra_manifest is not None and not isinstance(extra_manifest, dict):
+        raise HTTPException(status_code=400, detail="manifest.extra_manifest must be an object")
+
+    run_raw = merged.get("run")
+    if run_raw is None:
+        run_raw = {}
+    if not isinstance(run_raw, dict):
+        raise HTTPException(status_code=400, detail="manifest.run must be an object")
+
+    args_raw = run_raw.get("args")
+    if args_raw is None:
+        args = []
+    elif isinstance(args_raw, list):
+        args = [str(item) for item in args_raw]
+    else:
+        args = [str(args_raw)]
+
+    result: dict[str, Any] = {
+        "app_id": str(merged.get("app_id") or "").strip(),
+        "name": str(merged.get("name") or "").strip(),
+        "description": str(merged.get("description") or "").strip(),
+        "version": str(merged.get("version") or "").strip(),
+        "run": {
+            "entrypoint": str(run_raw.get("entrypoint") or "").strip(),
+            "args": args,
+        },
+    }
+
+    optional_paths = ("icon", "pre_install", "pre_uninstall", "update_this_version")
+    for key in optional_paths:
+        value = merged.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            result[key] = text
+
+    default_config = merged.get("default_config", {})
+    if default_config is None:
+        default_config = {}
+    if not isinstance(default_config, dict):
+        raise HTTPException(status_code=400, detail="manifest.default_config must be an object")
+    result["default_config"] = default_config
+
+    config_schema = merged.get("config_schema")
+    if config_schema is not None and not isinstance(config_schema, dict):
+        raise HTTPException(status_code=400, detail="manifest.config_schema must be an object or null")
+    if config_schema is not None:
+        result["config_schema"] = config_schema
+
+    known = _known_manifest_fields()
+    for key, value in merged.items():
+        if key in known:
+            continue
+        result[key] = value
+    if isinstance(extra_manifest, dict):
+        for key, value in extra_manifest.items():
+            if key not in result:
+                result[key] = value
+
+    if not result["name"] and result["app_id"]:
+        result["name"] = result["app_id"]
+    if not result["version"]:
+        result["version"] = "0.0.0"
+
+    return result
+
+
+def _manifest_for_form(payload: dict[str, Any]) -> dict[str, Any]:
+    normalized = _normalize_manifest_payload(payload)
+    form = _default_manifest_form()
+    form["app_id"] = normalized.get("app_id", "")
+    form["name"] = normalized.get("name", "")
+    form["description"] = normalized.get("description", "")
+    form["version"] = normalized.get("version", "0.1.0")
+    form["run"] = normalized.get("run", {"entrypoint": "", "args": []})
+    form["icon"] = normalized.get("icon", "")
+    form["pre_install"] = normalized.get("pre_install", "")
+    form["pre_uninstall"] = normalized.get("pre_uninstall", "")
+    form["update_this_version"] = normalized.get("update_this_version", "")
+    form["default_config"] = normalized.get("default_config", {})
+    form["config_schema"] = normalized.get("config_schema")
+
+    known = _known_manifest_fields()
+    extra: dict[str, Any] = {}
+    for key, value in normalized.items():
+        if key in known:
+            continue
+        extra[key] = value
+    form["extra_manifest"] = extra
+    return form
+
+
+def _resolve_inside_package(root: Path, rel_path: str, *, field: str) -> Path:
+    candidate = Path(rel_path)
+    if candidate.is_absolute():
+        raise HTTPException(status_code=400, detail=f"manifest.{field} cannot be an absolute path")
+    resolved = (root / candidate).resolve()
+    root_real = root.resolve()
+    if not str(resolved).startswith(str(root_real)):
+        raise HTTPException(status_code=400, detail=f"manifest.{field} path escapes package root")
+    if not resolved.exists() or not resolved.is_file():
+        raise HTTPException(status_code=400, detail=f"manifest.{field} points to a missing file: {rel_path}")
+    return resolved
+
+
+def _validate_manifest_for_package(
+    manifest: dict[str, Any],
+    *,
+    app_dir: Path,
+    expected_app_id: str | None = None,
+    expected_version: str | None = None,
+) -> None:
+    app_id = str(manifest.get("app_id") or "").strip()
+    if not app_id:
+        raise HTTPException(status_code=400, detail="manifest.app_id is required")
+    if expected_app_id and app_id != expected_app_id:
+        raise HTTPException(status_code=400, detail=f"manifest.app_id must be {expected_app_id}")
+
+    version = str(manifest.get("version") or "").strip()
+    if not version:
+        raise HTTPException(status_code=400, detail="manifest.version is required")
+    if expected_version and version != expected_version:
+        raise HTTPException(status_code=400, detail=f"manifest.version must be {expected_version}")
+
+    run = manifest.get("run")
+    if not isinstance(run, dict):
+        raise HTTPException(status_code=400, detail="manifest.run must be an object")
+    entrypoint = str(run.get("entrypoint") or "").strip()
+    if not entrypoint:
+        raise HTTPException(status_code=400, detail="manifest.run.entrypoint is required")
+    _resolve_inside_package(app_dir, entrypoint, field="run.entrypoint")
+
+    for hook in ("pre_install", "pre_uninstall", "update_this_version"):
+        value = manifest.get(hook)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if not text:
+            continue
+        _resolve_inside_package(app_dir, text, field=hook)
+
+
 def _safe_extract_zip(zip_path: Path, dest_dir: Path, prefix: str = "") -> None:
     dest_real = dest_dir.resolve()
     with zipfile.ZipFile(zip_path) as zf:
@@ -50,59 +269,33 @@ def _safe_extract_zip(zip_path: Path, dest_dir: Path, prefix: str = "") -> None:
                 norm_name = norm_name[len(prefix) :]
             if not norm_name:
                 continue
-            if norm_name == "app.yaml":
+            if norm_name in {"app.yaml", "manifest.yaml", "manifest.yml"}:
                 continue
             member_path = (dest_dir / norm_name).resolve()
             if not str(member_path).startswith(str(dest_real)):
-                raise HTTPException(status_code=400, detail="package.zip 路径非法")
+                raise HTTPException(status_code=400, detail="Invalid path in package.zip")
             member_path.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(member) as src, member_path.open("wb") as dst:
                 dst.write(src.read())
-
-
-def _detect_package_prefix(names: set[str]) -> str | None:
-    required = {
-        "scripts/install.sh",
-        "scripts/uninstall.sh",
-        "scripts/start.sh",
-        "assets/icon.png",
-    }
-    if all(name in names for name in required):
-        return ""
-    if all(f"app/{name}" in names for name in required):
-        return "app/"
-    return None
 
 
 async def _process_and_store_package(
     *,
     package_zip: UploadFile,
     package_root: Path,
-    name: str,
-    version: str,
-    description: str,
+    manifest_payload: dict[str, Any],
+    expected_app_id: str | None = None,
+    expected_version: str | None = None,
 ) -> tuple[Path, str, int]:
-    """Validate uploaded zip, extract, generate app.yaml, build final package.zip.
+    """Validate uploaded zip, extract, generate manifest.yaml, build final package.zip.
 
     Returns (package_path, artifact_sha256, artifact_size).
     Caller must handle cleanup of package_root on failure.
     """
-    yaml_text = (
-        f'name: "{_yaml_quote(name)}"\n'
-        f'version: "{_yaml_quote(version)}"\n'
-        f'description: "{_yaml_quote(description)}"\n'
-    )
-
     work_dir = package_root / "_build"
     try:
         app_dir = work_dir / "app"
-        scripts_dir = app_dir / "scripts"
-        assets_dir = app_dir / "assets"
         app_dir.mkdir(parents=True, exist_ok=True)
-        scripts_dir.mkdir(parents=True, exist_ok=True)
-        assets_dir.mkdir(parents=True, exist_ok=True)
-
-        (app_dir / "app.yaml").write_text(yaml_text, encoding="utf-8")
 
         tmp_zip = work_dir / "package.zip"
         tmp_zip.write_bytes(await package_zip.read())
@@ -110,16 +303,31 @@ async def _process_and_store_package(
             with zipfile.ZipFile(tmp_zip) as zf:
                 names = {_normalize_zip_name(n) for n in zf.namelist() if _normalize_zip_name(n)}
         except zipfile.BadZipFile as exc:
-            raise HTTPException(status_code=400, detail="package.zip 不是有效的 zip 文件") from exc
+            raise HTTPException(status_code=400, detail="package.zip is not a valid zip file") from exc
 
-        prefix = _detect_package_prefix(names)
-        if prefix is None:
-            raise HTTPException(
-                status_code=400,
-                detail="package.zip 缺少必须文件",
-            )
+        if not names:
+            raise HTTPException(status_code=400, detail="package.zip is empty")
+
+        manifest_member = _find_manifest_member(names)
+        prefix = _detect_package_prefix(names, manifest_member)
 
         _safe_extract_zip(tmp_zip, app_dir, prefix=prefix)
+
+        manifest = _normalize_manifest_payload(manifest_payload)
+        _validate_manifest_for_package(
+            manifest,
+            app_dir=app_dir,
+            expected_app_id=expected_app_id,
+            expected_version=expected_version,
+        )
+
+        (app_dir / "manifest.yaml").write_text(
+            yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+        legacy_manifest = app_dir / "manifest.yml"
+        if legacy_manifest.exists():
+            legacy_manifest.unlink()
 
         package_root.mkdir(parents=True, exist_ok=True)
         package_path = package_root / "package.zip"
@@ -127,7 +335,7 @@ async def _process_and_store_package(
             for path in app_dir.rglob("*"):
                 if path.is_dir():
                     continue
-                zf.write(path, path.relative_to(work_dir))
+                zf.write(path, path.relative_to(app_dir))
 
         artifact_sha = file_sha256(package_path)
         artifact_size = package_path.stat().st_size
@@ -137,45 +345,100 @@ async def _process_and_store_package(
             shutil.rmtree(work_dir, ignore_errors=True)
 
 
+def _parse_manifest_json(manifest_json: str) -> dict[str, Any]:
+    text = manifest_json.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="manifest_json is required")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"manifest_json is not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="manifest_json top-level value must be an object")
+    return payload
+
+
+async def parse_package_manifest(*, package_zip: UploadFile) -> dict[str, Any]:
+    tmp_dir = FILES_DIR / "_manifest_parse"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_zip = tmp_dir / f"{now_ts()}_{_app_name_tag(package_zip.filename or 'package')}.zip"
+    try:
+        tmp_zip.write_bytes(await package_zip.read())
+        try:
+            with zipfile.ZipFile(tmp_zip) as zf:
+                names = {_normalize_zip_name(n) for n in zf.namelist() if _normalize_zip_name(n)}
+                if not names:
+                    raise HTTPException(status_code=400, detail="package.zip is empty")
+                manifest_member = _find_manifest_member(names)
+                if not manifest_member:
+                    return {
+                        "ok": True,
+                        "has_manifest": False,
+                        "found_path": None,
+                        "manifest": {},
+                        "normalized_manifest": _default_manifest_form(),
+                        "warnings": ["manifest.yaml was not found in the package; using empty form defaults."],
+                    }
+                with zf.open(manifest_member) as fp:
+                    raw_manifest = _parse_manifest_yaml(fp.read().decode("utf-8"))
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail="package.zip is not a valid zip file") from exc
+
+        return {
+            "ok": True,
+            "has_manifest": True,
+            "found_path": manifest_member,
+            "manifest": raw_manifest,
+            "normalized_manifest": _manifest_for_form(raw_manifest),
+            "warnings": [],
+        }
+    finally:
+        if tmp_zip.exists():
+            tmp_zip.unlink(missing_ok=True)
+        if tmp_dir.exists():
+            tmp_dir.rmdir()
+
+
 async def upload_package(
     *,
     user: dict[str, Any],
     name: str,
     version: str,
     description: str,
+    manifest_json: str,
     package_zip: UploadFile,
 ) -> dict[str, Any]:
     ts = now_ts()
-    name_text = name.strip()
-    version_text = version.strip()
-    description_text = description.strip()
+    manifest_payload = _parse_manifest_json(manifest_json)
+    manifest = _normalize_manifest_payload(manifest_payload)
 
-    if not name_text or not version_text:
-        raise HTTPException(status_code=400, detail="必须提供 name 与 version")
+    app_id_text = str(manifest.get("app_id") or "").strip()
+    name_text = str(manifest.get("name") or app_id_text).strip()
+    version_text = str(manifest.get("version") or "").strip()
+    description_text = str(manifest.get("description") or "").strip()
 
-    if "\n" in name_text or "\r" in name_text or "\n" in version_text or "\r" in version_text:
-        raise HTTPException(status_code=400, detail="name 与 version 不能包含换行符")
+    if not app_id_text:
+        raise HTTPException(status_code=400, detail="manifest.app_id is required")
+    if not version_text:
+        raise HTTPException(status_code=400, detail="manifest.version is required")
 
     package_root: Path | None = None
     persisted = False
 
     try:
         with db_conn() as conn:
-            name_tag = _app_name_tag(name_text)
-            app_id_text = f"app_{name_tag}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(ts))}_{secrets.token_hex(3)}"
-            while conn.execute("SELECT 1 FROM app WHERE app_id = ?", (app_id_text,)).fetchone():
-                app_id_text = (
-                    f"app_{name_tag}_{time.strftime('%Y%m%d_%H%M%S', time.localtime(ts))}_{secrets.token_hex(3)}"
-                )
+            exists = conn.execute("SELECT 1 FROM app WHERE app_id = ?", (app_id_text,)).fetchone()
+            if exists:
+                raise HTTPException(status_code=409, detail=f"app_id {app_id_text} already exists")
 
             package_root = FILES_DIR / "apps" / app_id_text / version_text
 
             package_path, artifact_sha, artifact_size = await _process_and_store_package(
                 package_zip=package_zip,
                 package_root=package_root,
-                name=name_text,
-                version=version_text,
-                description=description_text,
+                manifest_payload=manifest,
+                expected_app_id=app_id_text,
+                expected_version=version_text,
             )
 
             cur = conn.execute(
@@ -247,17 +510,22 @@ async def upload_version(
     app_id_text: str,
     version: str,
     description: str,
+    manifest_json: str,
     package_zip: UploadFile,
 ) -> dict[str, Any]:
     """Upload a new version to an existing app."""
     ts = now_ts()
-    version_text = version.strip()
-    description_text = description.strip()
+    manifest_payload = _parse_manifest_json(manifest_json)
+    manifest = _normalize_manifest_payload(manifest_payload)
+    manifest_version = str(manifest.get("version") or "").strip()
+    if not manifest_version:
+        raise HTTPException(status_code=400, detail="manifest.version is required")
 
-    if not version_text:
-        raise HTTPException(status_code=400, detail="必须提供 version")
-    if "\n" in version_text or "\r" in version_text:
-        raise HTTPException(status_code=400, detail="version 不能包含换行符")
+    version_text = version.strip() or manifest_version
+    if version.strip() and version.strip() != manifest_version:
+        raise HTTPException(status_code=400, detail="version does not match manifest.version")
+
+    description_text = description.strip() or str(manifest.get("description") or "").strip()
 
     package_root: Path | None = None
     persisted = False
@@ -272,16 +540,16 @@ async def upload_version(
                 (app_pk, version_text),
             ).fetchone()
             if existing:
-                raise HTTPException(status_code=409, detail=f"版本 {version_text} 已存在")
+                raise HTTPException(status_code=409, detail=f"Version {version_text} already exists")
 
             package_root = FILES_DIR / "apps" / app_id_text / version_text
 
             package_path, artifact_sha, artifact_size = await _process_and_store_package(
                 package_zip=package_zip,
                 package_root=package_root,
-                name=app_row["name"],
-                version=version_text,
-                description=description_text or app_row["description"],
+                manifest_payload=manifest,
+                expected_app_id=app_id_text,
+                expected_version=version_text,
             )
 
             artifact_relpath = str(package_path.relative_to(FILES_DIR))
@@ -328,7 +596,7 @@ async def upload_version(
             conn.commit()
             persisted = True
     except sqlite3.IntegrityError as exc:
-        raise HTTPException(status_code=409, detail=f"版本 {version_text} 已存在") from exc
+        raise HTTPException(status_code=409, detail=f"Version {version_text} already exists") from exc
     finally:
         if not persisted and package_root and package_root.exists():
             shutil.rmtree(package_root, ignore_errors=True)
@@ -348,11 +616,22 @@ async def modify_version(
     app_id_text: str,
     version: str,
     description: str | None = None,
+    manifest_json: str | None = None,
     package_zip: UploadFile | None = None,
 ) -> dict[str, Any]:
     """Modify an existing version (update description and/or replace package)."""
     ts = now_ts()
     description_text = description.strip() if description else None
+    manifest: dict[str, Any] | None = None
+
+    if package_zip is not None and package_zip.filename:
+        manifest = _normalize_manifest_payload(_parse_manifest_json(manifest_json or ""))
+        manifest_version = str(manifest.get("version") or "").strip()
+        if manifest_version != version:
+            raise HTTPException(status_code=400, detail="manifest.version must match the version being edited")
+        manifest_desc = str(manifest.get("description") or "").strip()
+        if description_text is None and manifest_desc:
+            description_text = manifest_desc
 
     with db_conn() as conn:
         app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
@@ -381,9 +660,9 @@ async def modify_version(
             package_path, artifact_sha, artifact_size = await _process_and_store_package(
                 package_zip=package_zip,
                 package_root=package_root,
-                name=app_row["name"],
-                version=version,
-                description=description_text or app_row["description"],
+                manifest_payload=manifest or {},
+                expected_app_id=app_id_text,
+                expected_version=version,
             )
 
             artifact_relpath = str(package_path.relative_to(FILES_DIR))
@@ -428,14 +707,14 @@ def unpublish_version(
         version_row = get_version_owned(conn, app_row=app_row, version=version)
 
         if version_row["status"] == "unpublished":
-            raise HTTPException(status_code=400, detail="该版本已处于下架状态")
+            raise HTTPException(status_code=400, detail="This version is already unpublished")
 
         published_count = conn.execute(
             "SELECT COUNT(*) FROM app_version WHERE app_id = ? AND status = 'published'",
             (app_row["id"],),
         ).fetchone()[0]
         if published_count <= 1:
-            raise HTTPException(status_code=400, detail="无法下架：应用至少需要保留一个已发布版本")
+            raise HTTPException(status_code=400, detail="Cannot unpublish: at least one published version must remain")
 
         conn.execute(
             "UPDATE app_version SET status = 'unpublished', updated_at = ? WHERE id = ?",
@@ -467,7 +746,7 @@ def publish_version(
         version_row = get_version_owned(conn, app_row=app_row, version=version)
 
         if version_row["status"] == "published":
-            raise HTTPException(status_code=400, detail="该版本已处于发布状态")
+            raise HTTPException(status_code=400, detail="This version is already published")
 
         if version_row["published_at"]:
             # Re-publish: preserve original published_at
@@ -512,7 +791,7 @@ def delete_version(
             (app_pk,),
         ).fetchone()[0]
         if total_count <= 1:
-            raise HTTPException(status_code=400, detail="无法删除：应用至少需要保留一个版本")
+            raise HTTPException(status_code=400, detail="Cannot delete: the app must keep at least one version")
 
         # Audit log before delete (FK ON DELETE SET NULL will null out version_id)
         create_audit_log(

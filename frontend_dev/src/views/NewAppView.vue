@@ -1,11 +1,13 @@
 <script setup>
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import ActionOutput from "../components/ActionOutput.vue";
 import AppTopBar from "../components/AppTopBar.vue";
 import { useAppUpload } from "../composables/useAppUpload";
 
 const router = useRouter();
-const { output, form, sampleUrl, bindFile, submitPackage } = useAppUpload();
+const { t } = useI18n();
+const { output, parsingManifest, form, sampleUrl, bindPackageZip, submitPackage } = useAppUpload(t);
 
 async function submit() {
   await submitPackage({
@@ -22,26 +24,45 @@ async function submit() {
 <template>
   <div class="bg"></div>
   <section class="page-wrap">
-    <AppTopBar title="上传新应用" subtitle="按规范上传材料，后端统一打包" />
+    <AppTopBar :title="t('upload.title')" :subtitle="t('upload.subtitle')" />
 
     <section class="card list-wrap">
-      <h2>基础信息</h2>
+      <h2>{{ t("upload.basic") }}</h2>
       <form class="grid3" @submit.prevent="submit">
-        <input v-model="form.name.value" placeholder="name" required />
-        <input v-model="form.version.value" placeholder="version" required />
-        <input v-model="form.description.value" class="full" placeholder="description" />
+        <input v-model="form.appId" :placeholder="t('fields.appId')" required />
+        <input v-model="form.name" :placeholder="t('fields.name')" />
+        <input v-model="form.version" :placeholder="t('fields.version')" required />
 
-        <h2 class="full">必需材料</h2>
+        <input v-model="form.entrypoint" class="full" :placeholder="t('fields.entrypoint')" required />
+        <textarea v-model="form.description" class="full" :placeholder="t('fields.description')" rows="2" />
+
+        <h2 class="full">{{ t("upload.requiredMaterials") }}</h2>
         <div class="file-row full">
-          <span class="file-label">应用材料压缩包（zip）</span>
-          <input type="file" accept=".zip" @change="bindFile('packageZip', $event)" />
+          <span class="file-label">{{ t("upload.packageZip") }}</span>
+          <input type="file" accept=".zip" @change="bindPackageZip" />
         </div>
-        <p class="hint full">必须包含：assets/icon.png。</p>
+        <p class="hint full" v-if="parsingManifest">{{ t("upload.parsing") }}</p>
+        <p class="hint full">{{ t("upload.hintManifest") }}</p>
+        <p class="hint full">{{ t("upload.hintEntrypoint") }}</p>
+        <p class="hint full">{{ t("upload.hintConfig") }}</p>
+
+        <h2 class="full">{{ t("upload.runHooks") }}</h2>
+        <textarea v-model="form.argsText" class="full" :placeholder="t('fields.runArgs') + ' (' + t('common.jsonHint') + ') '" rows="2" />
+        <input v-model="form.icon" :placeholder="t('fields.icon')" />
+        <input v-model="form.preInstall" :placeholder="t('fields.preInstall')" />
+        <input v-model="form.preUninstall" :placeholder="t('fields.preUninstall')" />
+        <input v-model="form.updateThisVersion" class="full" :placeholder="t('fields.updateThisVersion')" />
+
+        <h2 class="full">{{ t("upload.configExtra") }}</h2>
+        <textarea v-model="form.defaultConfigText" class="full" :placeholder="t('fields.defaultConfig') + ' (' + t('common.jsonHint') + ') '" rows="4" />
+        <textarea v-model="form.configSchemaText" class="full" :placeholder="t('fields.configSchema') + ' (' + t('common.jsonHint') + ') '" rows="4" />
+        <textarea v-model="form.extraManifestText" class="full" :placeholder="t('fields.extraManifest') + ' (' + t('common.jsonHint') + ') '" rows="4" />
+
         <p class="hint full">
-          <a class="link" :href="sampleUrl" target="_blank" rel="noreferrer">下载示例 package.zip</a>
+          <a class="link" :href="sampleUrl" target="_blank" rel="noreferrer">{{ t("upload.downloadSample") }}</a>
         </p>
 
-        <button class="full">上传</button>
+        <button class="full">{{ t("upload.submit") }}</button>
       </form>
     </section>
 

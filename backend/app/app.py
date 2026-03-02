@@ -14,7 +14,7 @@ from app.services.db import init_db
 def create_app() -> FastAPI:
     ensure_storage_dirs()
 
-    api = FastAPI(title="aivuda App Store", version="0.3.0")
+    api = FastAPI(title="Aivuda App Store", version="0.3.0")
     api.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
