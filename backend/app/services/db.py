@@ -240,7 +240,7 @@ def build_manifest(
     return {
         "app_id": app_row["app_id"],
         "name": app_row["name"],
-        "description": app_row["description"],
+        "description": version_row["description"] or app_row["description"],
         "version": version_row["version"],
         "status": version_row["status"],
         "run": {
