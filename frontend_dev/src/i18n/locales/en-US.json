@@ -60,6 +60,7 @@
     "loading": "Loading...",
     "empty": "No apps available",
     "versionPrefix": "Version {version}",
+    "newestVersionPrefix": "Newest version {version}",
     "confirmDeleteAppMessage": "⚠️ Dangerous operation!\n\nDelete app '{name}' permanently?\n\nThis removes all versions, package files and related records, and cannot be undone!",
     "confirmDeleteAppAgain": "Final confirmation: deleting '{name}' is irreversible. Continue?"
   },

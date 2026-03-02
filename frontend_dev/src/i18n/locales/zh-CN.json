@@ -60,6 +60,7 @@
     "loading": "加载中...",
     "empty": "暂无应用",
     "versionPrefix": "版本 {version}",
+    "newestVersionPrefix": "最新版本 {version}",
     "confirmDeleteAppMessage": "⚠️ 危险操作！\n\n确定要永久删除应用「{name}」吗？\n\n此操作将删除该应用的所有版本、安装包文件和全部记录，且不可恢复！",
     "confirmDeleteAppAgain": "再次确认：删除应用「{name}」后无法恢复，是否继续？"
   },

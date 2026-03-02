@@ -85,7 +85,7 @@ onMounted(load);
           v-for="item in apps"
           :key="item.app_id"
           :title="item.manifest?.name || item.app_id"
-          :subtitle="t('store.versionPrefix', { version: item.version })"
+          :subtitle="t('store.newestVersionPrefix', { version: item.version })"
           :description="item.manifest?.description || ''"
           :downloading="downloadingId === `${item.app_id}:${item.version}`"
           :show-delete="isAdmin()"
