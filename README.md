@@ -44,15 +44,11 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 
 ## 生产部署Caddy 启动（前端托管 + 后端代理）
 
-支持 HTTP/HTTPS、前端静态托管、后端反代，以及对公开接口（`/store`）的 CORS 放开，见：
+支持 HTTP/HTTPS、前端静态托管、后端反代，见：
 
 [backend/docs/deploy-caddy.md](backend/docs/deploy-caddy.md)
 
 在仓库根目录可直接启动：
-
-```bash
-bash scripts/install_caddy_local.sh
-```
 
 ```bash
 bash scripts/install_user_services.sh
