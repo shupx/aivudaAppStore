@@ -4,7 +4,6 @@ FastAPI 后端，提供：
 
 - 开发者管理接口：`/aivuda_app_store/dev/*`
 - 公开商店接口：`/aivuda_app_store/store/*`
-- 文件下载：`/aivuda_app_store/files/*`
 
 ## 启动
 

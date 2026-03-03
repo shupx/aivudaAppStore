@@ -45,8 +45,6 @@
   },
   "login": {
     "console": "Developer Console",
-    "backendUrl": "Backend URL",
-    "backendUrlPlaceholder": "http://127.0.0.1:9001",
     "username": "Username",
     "password": "Password",
     "submit": "Login",

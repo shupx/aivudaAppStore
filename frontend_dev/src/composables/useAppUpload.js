@@ -122,8 +122,7 @@ export function useAppUpload(t) {
   };
 
   const sampleUrl = computed(() => {
-    const base = (session.baseUrl || "").replace(/\/$/, "");
-    return base ? `${base}${APPSTORE_API_PREFIX}/store/sample-package` : `${APPSTORE_API_PREFIX}/store/sample-package`;
+    return `${APPSTORE_API_PREFIX}/store/sample-package`;
   });
 
   function setOutput(data, isError = false) {

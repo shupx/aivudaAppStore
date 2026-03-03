@@ -45,8 +45,6 @@
   },
   "login": {
     "console": "开发者控制台",
-    "backendUrl": "后端地址",
-    "backendUrlPlaceholder": "http://127.0.0.1:9001",
     "username": "用户名",
     "password": "密码",
     "submit": "登录",

@@ -5,7 +5,7 @@ import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
 const { t } = useI18n();
-const { session, form, status, loginWithForm } = useAuth(t);
+const { form, status, loginWithForm } = useAuth(t);
 
 async function onLogin() {
   await loginWithForm({
@@ -24,10 +24,6 @@ async function onLogin() {
       <p>{{ t("login.console") }}</p>
 
       <form class="stack" @submit.prevent="onLogin">
-        <label>
-          {{ t("login.backendUrl") }}
-          <input v-model.trim="session.baseUrl" :placeholder="t('login.backendUrlPlaceholder')" />
-        </label>
         <label>
           {{ t("login.username") }}
           <input v-model="form.username" required />

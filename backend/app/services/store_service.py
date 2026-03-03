@@ -81,7 +81,11 @@ def store_app_detail(app_id: str) -> dict[str, Any]:
         for v_row in all_versions:
             targets = get_targets(conn, version_id=v_row["id"])
             artifact_size = targets[0]["artifact_size"] if targets else 0
-            artifact_url = f"{APPSTORE_API_PREFIX}/files/{targets[0]['artifact_relpath']}" if targets and targets[0]["artifact_relpath"] else ""
+            artifact_url = (
+                f"{APPSTORE_API_PREFIX}/store/apps/{app_id}/versions/{v_row['version']}/download"
+                if targets and targets[0]["artifact_relpath"]
+                else ""
+            )
             versions.append({
                 "version": v_row["version"],
                 "description": v_row["description"],
@@ -199,3 +203,5 @@ def store_download_file(app_id: str, version: str) -> FileResponse:
 
     download_name = f"{app_id}-{version}.zip"
     return FileResponse(package_path, media_type="application/zip", filename=download_name)
+    #TODO: use nginx X-Accel-Redirect to handle static file （这里直接后端FileResponse在高并发、大文件情况下对后端程序压力比较大）
+    #TODO: 大规模文件托管应该用对象存储服务OBS，minIO之类的分布式存储文件服务

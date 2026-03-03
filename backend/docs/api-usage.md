@@ -77,7 +77,7 @@ Authorization: Bearer <access_token>
   "app_id": "app_demo",
   "version": "1.0.0",
   "status": "published",
-  "download_url": "/aivuda_app_store/files/apps/app_demo/1.0.0/package.zip"
+  "download_url": "/aivuda_app_store/store/apps/app_demo/versions/1.0.0/download"
 }
 ```
 

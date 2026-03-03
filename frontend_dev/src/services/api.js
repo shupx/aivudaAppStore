@@ -4,22 +4,15 @@ import { i18n } from "../i18n";
 export const APPSTORE_API_PREFIX = "/aivuda_app_store";
 
 export const session = reactive({
-  baseUrl: localStorage.getItem("appstore_base_url") || "http://127.0.0.1:9001",
   token: localStorage.getItem("appstore_token") || "",
   user: null,
 });
-
-export function setBaseUrl(url) {
-  session.baseUrl = (url || "").trim();
-  localStorage.setItem("appstore_base_url", session.baseUrl);
-}
 
 function apiUrl(path) {
   const normalizedPath = path.startsWith(APPSTORE_API_PREFIX)
     ? path
     : `${APPSTORE_API_PREFIX}${path.startsWith("/") ? path : `/${path}`}`;
-  if (!session.baseUrl) return normalizedPath;
-  return `${session.baseUrl.replace(/\/$/, "")}${normalizedPath}`;
+  return normalizedPath;
 }
 
 export function buildApiUrl(path) {

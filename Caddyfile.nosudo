@@ -1,0 +1,30 @@
+{
+  auto_https disable_redirects
+}
+
+(appstore_site) {
+  encode zstd gzip
+
+  @api path /aivuda_app_store*
+
+  route {
+    handle @api {
+      reverse_proxy 127.0.0.1:9001
+    }
+
+    handle {
+      root * ./frontend_dev/dist
+      try_files {path} /index.html
+      file_server
+    }
+  }
+}
+
+http://:8080 {
+  import appstore_site
+}
+
+https://:8443 {
+  tls internal
+  import appstore_site
+}

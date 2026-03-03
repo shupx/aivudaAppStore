@@ -232,9 +232,10 @@ def build_manifest(
     install_obj = {"url": "", "sha256": "", "size": 0}
     if target_rows:
         target = target_rows[0]
-        relpath = target["artifact_relpath"]
+        app_id_text = str(app_row["app_id"])
+        version_text = str(version_row["version"])
         install_obj = {
-            "url": f"{APPSTORE_API_PREFIX}/files/{relpath}" if relpath else "",
+            "url": f"{APPSTORE_API_PREFIX}/store/apps/{app_id_text}/versions/{version_text}/download",
             "sha256": target["artifact_sha256"] or "",
             "size": target["artifact_size"] or 0,
         }

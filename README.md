@@ -27,9 +27,7 @@ npm run dev
 
 打开 `http://127.0.0.1:5174`进入前端网页
 
-> 由于里面的请求地址都是用的后端绝对地址而不是vite.config.js来设置代理，所以存在跨域问题，因此`app/app.py`里设置了CORS允许本地所有端口，用于开发调试时允许前端网站连接。
-
-登录页填写 `Backend URL`（例如 `http://127.0.0.1:9001`）。
+> 开发环境由 `vite.config.js` 代理 `/aivuda_app_store` 到 `http://127.0.0.1:9001`，无需手工输入 Backend URL。
 
 
 ## 生产部署（本地快速）
@@ -46,14 +44,24 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 
 ## 生产部署Caddy 启动（前端托管 + 后端代理）
 
-支持 HTTP/HTTPS、前端静态托管、后端反代，以及对公开接口（`/store`、`/files`）的 CORS 放开，见：
+支持 HTTP/HTTPS、前端静态托管、后端反代，以及对公开接口（`/store`）的 CORS 放开，见：
 
 [backend/docs/deploy-caddy.md](backend/docs/deploy-caddy.md)
 
-推荐直接使用自动脚本（会自动写入绝对路径并用 systemd 重载 Caddy）：
+在仓库根目录可直接启动：
 
 ```bash
-./scripts/install_caddy_systemd.sh
+bash scripts/install_caddy_local.sh
+```
+
+```bash
+bash scripts/install_user_services.sh
+```
+
+上面脚本会安装并启用单个用户服务 `aivuda-appstore.service`（同时启动 backend + caddy）。
+
+```bash
+./.tools/caddy/caddy run --config Caddyfile.nosudo
 ```
 
 

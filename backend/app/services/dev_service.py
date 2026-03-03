@@ -540,7 +540,7 @@ async def upload_package(
         "app_id": app_id_text,
         "version": version_text,
         "status": "published",
-        "download_url": f"{APPSTORE_API_PREFIX}/files/{artifact_relpath}",
+        "download_url": f"{APPSTORE_API_PREFIX}/store/apps/{app_id_text}/versions/{version_text}/download",
     }
 
 
@@ -656,7 +656,7 @@ async def upload_version(
         "app_id": app_id_text,
         "version": version_text,
         "status": "published",
-        "download_url": f"{APPSTORE_API_PREFIX}/files/{artifact_relpath}",
+        "download_url": f"{APPSTORE_API_PREFIX}/store/apps/{app_id_text}/versions/{version_text}/download",
     }
 
 
