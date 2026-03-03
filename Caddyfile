@@ -1,0 +1,44 @@
+{
+  auto_https disable_redirects
+}
+
+(appstore_site) {
+  encode zstd gzip
+
+  @public_preflight {
+    method OPTIONS
+    path /aivuda_app_store/store* /aivuda_app_store/files*
+  }
+  handle @public_preflight {
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, OPTIONS"
+    header Access-Control-Allow-Headers "Content-Type, Authorization, Range"
+    header Access-Control-Max-Age "86400"
+    respond "" 204
+  }
+
+  @public_cors path /aivuda_app_store/store* /aivuda_app_store/files*
+  header @public_cors Access-Control-Allow-Origin "*"
+  header @public_cors Access-Control-Allow-Methods "GET, OPTIONS"
+  header @public_cors Access-Control-Allow-Headers "Content-Type, Authorization, Range"
+  header @public_cors Access-Control-Expose-Headers "Content-Length, Content-Range, Content-Disposition"
+
+  handle /aivuda_app_store/* {
+    reverse_proxy 127.0.0.1:9001
+  }
+
+  # IMPORTANT: when running as systemd service, use absolute path for static root.
+  # Replace this path with your real deployment path.
+  root * /home/your-user/aivuda/aivudaAppStore/frontend_dev/dist
+  try_files {path} /index.html
+  file_server
+}
+
+http://:80 {
+  import appstore_site
+}
+
+https://:443 {
+  tls internal
+  import appstore_site
+}

@@ -20,11 +20,19 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 
 ## 安装包规范
 
-见 `backend/docs/app-package-spec.md`。
+见 [docs/app-package-spec.md](docs/app-package-spec.md)
 
 ## API 使用说明
 
-见 `backend/docs/api-usage.md`。
+见[docs/api-usage.md](docs/api-usage.md)
+
+## Caddy 部署
+
+前端托管 + 后端代理（含公开接口 CORS、HTTP/HTTPS）见：
+
+[docs/deploy-caddy.md](docs/deploy-caddy.md)
+
+## 上传逻辑
 
 上传与编辑版本时：
 
