@@ -127,8 +127,8 @@ export function useAppUpload(t) {
   function generateAppId() {
     const appName = toAppIdSlug(form.name || form.appId || "app");
     const now = new Date();
-    const ymms = `${now.getFullYear()}${twoDigits(now.getMonth() + 1)}${twoDigits(now.getMinutes())}${twoDigits(now.getSeconds())}`;
-    const randomNum = Math.floor(Math.random() * 9000) + 1000;
+    const ymms = `${now.getFullYear()}${twoDigits(now.getMonth() + 1)}${twoDigits(now.getDate())}${twoDigits(now.getHours())}`;
+    const randomNum = Math.floor(Math.random() * 0x10000).toString(16).padStart(4, "0");
     form.appId = `app_${appName}_${ymms}_${randomNum}`;
   }
 
