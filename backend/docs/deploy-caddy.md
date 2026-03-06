@@ -93,7 +93,7 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 默认监听：
 
 - HTTP: `http://<host>:8080`
-- HTTPS: `https://<host>:8443` （局域网下需要用户浏览器安装后端服务器上的caddy证书才能打开）
+- HTTPS: `https://<host>:8443` （局域网下需要用户浏览器安装后端服务器上的caddy证书才能无警告地打开）
 
 使用：
 
@@ -140,7 +140,9 @@ journalctl --user -u aivuda-appstore.service -f
 sudo loginctl enable-linger $USER
 ```
 
-设置好后开机登录账户后即可登录 http://127.0.0.1:8080 或者 http://本机IP:8080
+设置好后开机登录账户后即可登录 http://127.0.0.1:8080，https://127.0.0.1:8443 或者 http://本机IP:8080 。
+
+https目前设置了127.0.0.1，如果要改成实际IP或者域名，需要去手动修改Caddyfile.nosudo文件里的`https://127.0.0.1:8443`，然后重启服务`systemctl --user restart aivuda-appstore.service`
 
 ## 5. CORS 说明
 
