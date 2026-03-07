@@ -20,7 +20,7 @@
   }
 }
 
-https://{$APPSTORE_HTTPS_HOST:127.0.0.1}:443 {
+https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:443, https://{$APPSTORE_PRIVATE_HTTPS_HOST:127.0.0.1}:443 {
   tls internal
   import appstore_site
 }

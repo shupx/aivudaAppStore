@@ -14,20 +14,106 @@ CADDY_BIN="${REPO_DIR}/.tools/caddy/caddy"
 CADDY_CONFIG="${REPO_DIR}/Caddyfile"
 FRONTEND_DIST="${REPO_DIR}/frontend_dev/dist"
 STACK_RUN_SCRIPT="${REPO_DIR}/scripts/run_appstore_stack.sh"
-APPSTORE_HTTPS_HOST="${APPSTORE_HTTPS_HOST:-}"
+APPSTORE_PUBLIC_HTTPS_HOST="${APPSTORE_PUBLIC_HTTPS_HOST:-}"
+APPSTORE_PRIVATE_HTTPS_HOST="${APPSTORE_PRIVATE_HTTPS_HOST:-}"
 
-ensure_https_host() {
-  if [[ -z "${APPSTORE_HTTPS_HOST}" ]]; then
-    read -r -p "Input HTTPS public IP/domain for Caddy (APPSTORE_HTTPS_HOST): " APPSTORE_HTTPS_HOST
+list_local_ipv4_candidates() {
+  local ip_list=()
+  local token
+
+  if command -v hostname >/dev/null 2>&1; then
+    for token in $(hostname -I 2>/dev/null || true); do
+      if [[ "${token}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && [[ "${token}" != "127.0.0.1" ]]; then
+        ip_list+=("${token}")
+      fi
+    done
   fi
 
-  if [[ -z "${APPSTORE_HTTPS_HOST}" ]]; then
-    echo "APPSTORE_HTTPS_HOST is required." >&2
+  if command -v ip >/dev/null 2>&1; then
+    while IFS= read -r token; do
+      if [[ "${token}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && [[ "${token}" != "127.0.0.1" ]]; then
+        ip_list+=("${token}")
+      fi
+    done < <(ip -o -4 addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1)
+  fi
+
+  if [[ ${#ip_list[@]} -gt 0 ]]; then
+    printf "%s\n" "${ip_list[@]}" | awk '!seen[$0]++'
+  fi
+}
+
+prompt_private_https_host() {
+  local candidates=()
+  local idx=0
+  local pick=""
+
+  while IFS= read -r line; do
+    [[ -n "${line}" ]] && candidates+=("${line}")
+  done < <(list_local_ipv4_candidates)
+
+  if [[ ${#candidates[@]} -eq 0 ]]; then
+    read -r -p "Input HTTPS private IP/domain for Caddy (APPSTORE_PRIVATE_HTTPS_HOST): " APPSTORE_PRIVATE_HTTPS_HOST
+    return
+  fi
+
+  echo "Detected local IPv4 addresses:"
+  for idx in "${!candidates[@]}"; do
+    printf "  [%d] %s\n" "$((idx + 1))" "${candidates[idx]}"
+  done
+  echo "  [m] Manual input"
+
+  read -r -p "Select private IP [1-${#candidates[@]}] or m: " pick
+  if [[ "${pick}" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= ${#candidates[@]} )); then
+    APPSTORE_PRIVATE_HTTPS_HOST="${candidates[pick-1]}"
+    echo "Selected private host: ${APPSTORE_PRIVATE_HTTPS_HOST}"
+  else
+    read -r -p "Input HTTPS private IP/domain for Caddy (APPSTORE_PRIVATE_HTTPS_HOST): " APPSTORE_PRIVATE_HTTPS_HOST
+  fi
+}
+
+ensure_https_hosts() {
+  if [[ -z "${APPSTORE_PUBLIC_HTTPS_HOST}" ]]; then
+    read -r -p "Input HTTPS public IP/domain for Caddy (APPSTORE_PUBLIC_HTTPS_HOST): " APPSTORE_PUBLIC_HTTPS_HOST
+  fi
+
+  if [[ -z "${APPSTORE_PRIVATE_HTTPS_HOST}" ]]; then
+    prompt_private_https_host
+  fi
+
+  if [[ -z "${APPSTORE_PUBLIC_HTTPS_HOST}" ]]; then
+    echo "APPSTORE_PUBLIC_HTTPS_HOST is required." >&2
     exit 1
   fi
 
-  if [[ "${APPSTORE_HTTPS_HOST}" =~ [[:space:]] ]]; then
-    echo "APPSTORE_HTTPS_HOST cannot contain spaces: ${APPSTORE_HTTPS_HOST}" >&2
+  if [[ -z "${APPSTORE_PRIVATE_HTTPS_HOST}" ]]; then
+    echo "APPSTORE_PRIVATE_HTTPS_HOST is required." >&2
+    exit 1
+  fi
+
+  if [[ "${APPSTORE_PUBLIC_HTTPS_HOST}" =~ [[:space:]] ]]; then
+    echo "APPSTORE_PUBLIC_HTTPS_HOST cannot contain spaces: ${APPSTORE_PUBLIC_HTTPS_HOST}" >&2
+    exit 1
+  fi
+
+  if [[ "${APPSTORE_PRIVATE_HTTPS_HOST}" =~ [[:space:]] ]]; then
+    echo "APPSTORE_PRIVATE_HTTPS_HOST cannot contain spaces: ${APPSTORE_PRIVATE_HTTPS_HOST}" >&2
+    exit 1
+  fi
+}
+
+update_caddyfile_https_hosts() {
+  if [[ ! -f "${CADDY_CONFIG}" ]]; then
+    echo "Caddy config not found: ${CADDY_CONFIG}" >&2
+    exit 1
+  fi
+
+  local site_line
+  site_line="https://${APPSTORE_PUBLIC_HTTPS_HOST}:443, https://${APPSTORE_PRIVATE_HTTPS_HOST}:443 {"
+
+  if grep -qE '^https://[^\{]*:443[^\{]*\{$' "${CADDY_CONFIG}"; then
+    sed -i -E "0,/^https:\/\/[^\{]*:443[^\{]*\{$/s//${site_line//\//\\/}/" "${CADDY_CONFIG}"
+  else
+    echo "Cannot find HTTPS site block line in ${CADDY_CONFIG}." >&2
     exit 1
   fi
 }
@@ -73,7 +159,8 @@ ensure_user_linger_enabled() {
 
 mkdir -p "${USER_SYSTEMD_DIR}"
 
-ensure_https_host
+ensure_https_hosts
+update_caddyfile_https_hosts
 ensure_caddy_bind_443_permission
 ensure_user_linger_enabled
 
@@ -86,7 +173,6 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${REPO_DIR}
-Environment=APPSTORE_HTTPS_HOST=${APPSTORE_HTTPS_HOST}
 ExecStartPre=/usr/bin/test -x ${CADDY_BIN}
 ExecStartPre=/usr/bin/test -f ${CADDY_CONFIG}
 ExecStartPre=/usr/bin/test -d ${FRONTEND_DIST}
@@ -103,7 +189,8 @@ rm -f "${LEGACY_BACKEND_UNIT}" "${LEGACY_CADDY_UNIT}" "${LEGACY_TARGET_UNIT}"
 
 echo "User service generated:"
 echo "  - ${STACK_UNIT}"
-echo "HTTPS host: ${APPSTORE_HTTPS_HOST}"
+echo "HTTPS public host: ${APPSTORE_PUBLIC_HTTPS_HOST}"
+echo "HTTPS private host: ${APPSTORE_PRIVATE_HTTPS_HOST}"
 
 if pgrep -af "python3 -m uvicorn main:app.*--port 9001|gunicorn.*main:app.*127.0.0.1:9001" >/dev/null; then
   echo ""

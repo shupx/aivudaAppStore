@@ -2,6 +2,8 @@
 
 aivudaAppStore 现已拆分为独立的后端与前端目录。
 
+支持本地部署和服务器部署。一个已经部署在阿里云服务器上的例子：https://123.56.143.44/
+
 ## 目录
 
 - `backend/`: python FastAPI 后端（开发者管理 + 公开商店接口）
@@ -58,31 +60,33 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 
 [backend/docs/deploy-caddy.md](backend/docs/deploy-caddy.md)
 
-在仓库根目录可直接启动：
+先编译生成前端静态文件：
+
+```bash
+cd frontend_dev
+npm run build
+```
+
+在仓库根目录可直接启动安装自启动脚本：
 
 ```bash
 bash scripts/install_user_services.sh
 ```
 
-上面脚本会在安装时要求输入 HTTPS 公网 IP/域名（`APPSTORE_HTTPS_HOST`），并安装启用单个用户服务 `aivuda-appstore.service`（同时启动 backend + caddy）。
+上面脚本会在安装时要求输入两个 HTTPS 地址：
 
-由于 `443` 是特权端口，脚本会调用一次：
+- 公网 IP/域名：`APPSTORE_PUBLIC_HTTPS_HOST`
+- 内网 IP/域名：`APPSTORE_PRIVATE_HTTPS_HOST`
 
-```bash
-sudo setcap cap_net_bind_service=+ep ./.tools/caddy/caddy
+输入内网地址时，脚本会先列出当前服务器检测到的本机 IPv4 地址供选择，也可以手工输入。
+
+并自动把 `Caddyfile` 站点行改成：
+
+```caddy
+https://<public>:443, https://<private>:443 {
 ```
 
-这一步需要 sudo 权限。
-
-```bash
-./.tools/caddy/caddy run --config Caddyfile
-```
-
-安装脚本也会自动执行以下命令（需要 sudo）：
-
-```bash
-sudo loginctl enable-linger $USER
-```
+设置好后可直接访问 `https://<公网IP或域名>` 或 `https://<内网IP或域名>`。
 
 
 ## 安装包说明（manifest.yaml）

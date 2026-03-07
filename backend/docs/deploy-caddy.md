@@ -111,13 +111,31 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 
 ## 4.2 用户自启动（backend + caddy 一起）
 
-在仓库根目录执行：
+如果是开发模式，要先先编译生成前端静态文件：
+
+```bash
+cd frontend_dev
+npm run build
+```
+
+然后在仓库根目录执行设置开机自启动脚本：
 
 ```bash
 bash scripts/install_user_services.sh
 ```
 
-脚本会要求输入 HTTPS 公网 IP/域名（`APPSTORE_HTTPS_HOST`），并写入 `systemd --user` 服务环境变量。
+脚本会要求输入两个 HTTPS 地址：
+
+- 公网 IP/域名：`APPSTORE_PUBLIC_HTTPS_HOST`
+- 内网 IP/域名：`APPSTORE_PRIVATE_HTTPS_HOST`
+
+输入内网地址时，脚本会先列出当前服务器检测到的本机 IPv4 地址供选择，也可以手工输入。
+
+并自动把 `Caddyfile` 站点行改成：
+
+```caddy
+https://<public>:443, https://<private>:443 {
+```
 
 由于 `443` 是特权端口，脚本会调用：
 
@@ -149,9 +167,9 @@ journalctl --user -u aivuda-appstore.service -f
 sudo loginctl enable-linger $USER
 ```
 
-设置好后可直接访问 `https://<APPSTORE_HTTPS_HOST>`。
+设置好后可直接访问 `https://<公网IP或域名>` 或 `https://<内网IP或域名>`。
 
-如需修改公网 IP/域名，可重新执行安装脚本并输入新的 `APPSTORE_HTTPS_HOST`，然后重启服务：
+如需修改公网/内网地址，可重新执行安装脚本并输入新的 `APPSTORE_PUBLIC_HTTPS_HOST` / `APPSTORE_PRIVATE_HTTPS_HOST`，然后重启服务：
 
 ```bash
 systemctl --user restart aivuda-appstore.service
