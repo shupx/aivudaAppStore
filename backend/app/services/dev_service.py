@@ -757,7 +757,6 @@ def unpublish_version(
     version: str,
 ) -> dict[str, Any]:
     """Soft delist: set version status to 'unpublished'."""
-    ts = now_ts()
     with db_conn() as conn:
         app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
         version_row = get_version_owned(conn, app_row=app_row, version=version)
@@ -773,8 +772,8 @@ def unpublish_version(
             raise HTTPException(status_code=400, detail="Cannot unpublish: at least one published version must remain")
 
         conn.execute(
-            "UPDATE app_version SET status = 'unpublished', updated_at = ? WHERE id = ?",
-            (ts, version_row["id"]),
+            "UPDATE app_version SET status = 'unpublished' WHERE id = ?",
+            (version_row["id"],),
         )
         create_audit_log(
             conn,
@@ -796,7 +795,6 @@ def publish_version(
     version: str,
 ) -> dict[str, Any]:
     """Re-publish a previously unpublished version."""
-    ts = now_ts()
     with db_conn() as conn:
         app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
         version_row = get_version_owned(conn, app_row=app_row, version=version)
@@ -807,14 +805,15 @@ def publish_version(
         if version_row["published_at"]:
             # Re-publish: preserve original published_at
             conn.execute(
-                "UPDATE app_version SET status = 'published', updated_at = ? WHERE id = ?",
-                (ts, version_row["id"]),
+                "UPDATE app_version SET status = 'published' WHERE id = ?",
+                (version_row["id"],),
             )
         else:
             # First publish
+            ts = now_ts()
             conn.execute(
-                "UPDATE app_version SET status = 'published', published_at = ?, updated_at = ? WHERE id = ?",
-                (ts, ts, version_row["id"]),
+                "UPDATE app_version SET status = 'published', published_at = ? WHERE id = ?",
+                (ts, version_row["id"]),
             )
         create_audit_log(
             conn,
