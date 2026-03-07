@@ -101,23 +101,6 @@ ensure_https_hosts() {
   fi
 }
 
-update_caddyfile_https_hosts() {
-  if [[ ! -f "${CADDY_CONFIG}" ]]; then
-    echo "Caddy config not found: ${CADDY_CONFIG}" >&2
-    exit 1
-  fi
-
-  local site_line
-  site_line="https://${APPSTORE_PUBLIC_HTTPS_HOST}:443, https://${APPSTORE_PRIVATE_HTTPS_HOST}:443 {"
-
-  if grep -qE '^https://[^\{]*:443[^\{]*\{$' "${CADDY_CONFIG}"; then
-    sed -i -E "0,/^https:\/\/[^\{]*:443[^\{]*\{$/s//${site_line//\//\\/}/" "${CADDY_CONFIG}"
-  else
-    echo "Cannot find HTTPS site block line in ${CADDY_CONFIG}." >&2
-    exit 1
-  fi
-}
-
 ensure_caddy_bind_443_permission() {
   if [[ ! -x "${CADDY_BIN}" ]]; then
     echo "Caddy binary not found or not executable: ${CADDY_BIN}" >&2
@@ -160,7 +143,6 @@ ensure_user_linger_enabled() {
 mkdir -p "${USER_SYSTEMD_DIR}"
 
 ensure_https_hosts
-update_caddyfile_https_hosts
 ensure_caddy_bind_443_permission
 ensure_user_linger_enabled
 
@@ -173,6 +155,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=${REPO_DIR}
+Environment=APPSTORE_PUBLIC_HTTPS_HOST=${APPSTORE_PUBLIC_HTTPS_HOST}
+Environment=APPSTORE_PRIVATE_HTTPS_HOST=${APPSTORE_PRIVATE_HTTPS_HOST}
 ExecStartPre=/usr/bin/test -x ${CADDY_BIN}
 ExecStartPre=/usr/bin/test -f ${CADDY_CONFIG}
 ExecStartPre=/usr/bin/test -d ${FRONTEND_DIST}

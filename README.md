@@ -80,11 +80,12 @@ bash scripts/install_user_services.sh
 
 输入内网地址时，脚本会先列出当前服务器检测到的本机 IPv4 地址供选择，也可以手工输入。
 
-并自动把 `Caddyfile` 站点行改成：
+并写入 `aivuda-appstore.service` 的环境变量：
 
-```caddy
-https://<public>:443, https://<private>:443 {
-```
+- `APPSTORE_PUBLIC_HTTPS_HOST`
+- `APPSTORE_PRIVATE_HTTPS_HOST`
+
+`Caddyfile` 会读取这两个环境变量来绑定 HTTPS 站点。
 
 设置好后可直接访问 `https://<公网IP或域名>` 或 `https://<内网IP或域名>`。
 
