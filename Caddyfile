@@ -20,11 +20,7 @@
   }
 }
 
-http://:80 {
-  import appstore_site
-}
-
-https://:443 {
+https://{$APPSTORE_HTTPS_HOST:127.0.0.1}:443 {
   tls internal
   import appstore_site
 }

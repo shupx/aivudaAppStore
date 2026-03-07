@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 CADDY_BIN="${REPO_DIR}/.tools/caddy/caddy"
-CADDY_CONFIG="${REPO_DIR}/Caddyfile.nosudo"
+CADDY_CONFIG="${REPO_DIR}/Caddyfile"
 FRONTEND_DIST="${REPO_DIR}/frontend_dev/dist"
 
 if [[ ! -x "${CADDY_BIN}" ]]; then

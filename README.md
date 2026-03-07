@@ -25,9 +25,19 @@ npm install
 npm run dev
 ```
 
+> 开发环境由 `vite.config.js` 代理 `/aivuda_app_store` 到 `http://127.0.0.1:9001`，无需手工输入 Backend URL。
+
 打开 `http://127.0.0.1:5174`进入前端网页
 
-> 开发环境由 `vite.config.js` 代理 `/aivuda_app_store` 到 `http://127.0.0.1:9001`，无需手工输入 Backend URL。
+如果还没安装node和npm，建议手动安装24版的(仅开发需要)：
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
+sudo apt remove libnode-dev nodejs #删除旧的nodejs
+sudo apt install -y nodejs
+node -v # v24.14.0
+npm -v  # 11.9.0
+```
 
 
 ## 生产部署（本地快速）
@@ -44,7 +54,7 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 
 ## 生产部署Caddy 启动（前端托管 + 后端代理）
 
-支持 HTTP/HTTPS、前端静态托管、后端反代，见：
+默认仅 HTTPS `443`、前端静态托管、后端反代，见：
 
 [backend/docs/deploy-caddy.md](backend/docs/deploy-caddy.md)
 
@@ -54,10 +64,24 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 bash scripts/install_user_services.sh
 ```
 
-上面脚本会安装并启用单个用户服务 `aivuda-appstore.service`（同时启动 backend + caddy）。
+上面脚本会在安装时要求输入 HTTPS 公网 IP/域名（`APPSTORE_HTTPS_HOST`），并安装启用单个用户服务 `aivuda-appstore.service`（同时启动 backend + caddy）。
+
+由于 `443` 是特权端口，脚本会调用一次：
 
 ```bash
-./.tools/caddy/caddy run --config Caddyfile.nosudo
+sudo setcap cap_net_bind_service=+ep ./.tools/caddy/caddy
+```
+
+这一步需要 sudo 权限。
+
+```bash
+./.tools/caddy/caddy run --config Caddyfile
+```
+
+安装脚本也会自动执行以下命令（需要 sudo）：
+
+```bash
+sudo loginctl enable-linger $USER
 ```
 
 
