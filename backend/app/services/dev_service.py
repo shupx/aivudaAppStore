@@ -48,6 +48,9 @@ def _known_manifest_fields() -> set[str]:
         "pre_install",
         "pre_uninstall",
         "update_this_version",
+        "ui_index_path",
+        "default_config_path",
+        "config_schema_path",
         "default_config",
         "config_schema",
         "extra_manifest",
@@ -65,6 +68,9 @@ def _default_manifest_form() -> dict[str, Any]:
         "pre_install": "",
         "pre_uninstall": "",
         "update_this_version": "",
+        "ui_index_path": "",
+        "default_config_path": "",
+        "config_schema_path": "",
         "default_config": {},
         "config_schema": None,
         "extra_manifest": {},
@@ -141,7 +147,15 @@ def _normalize_manifest_payload(payload: dict[str, Any]) -> dict[str, Any]:
         },
     }
 
-    optional_paths = ("icon", "pre_install", "pre_uninstall", "update_this_version")
+    optional_paths = (
+        "icon",
+        "pre_install",
+        "pre_uninstall",
+        "update_this_version",
+        "ui_index_path",
+        "default_config_path",
+        "config_schema_path",
+    )
     for key in optional_paths:
         value = merged.get(key)
         if value is None:
@@ -193,6 +207,9 @@ def _manifest_for_form(payload: dict[str, Any]) -> dict[str, Any]:
     form["pre_install"] = normalized.get("pre_install", "")
     form["pre_uninstall"] = normalized.get("pre_uninstall", "")
     form["update_this_version"] = normalized.get("update_this_version", "")
+    form["ui_index_path"] = normalized.get("ui_index_path", "")
+    form["default_config_path"] = normalized.get("default_config_path", "")
+    form["config_schema_path"] = normalized.get("config_schema_path", "")
     form["default_config"] = normalized.get("default_config", {})
     form["config_schema"] = normalized.get("config_schema")
 
