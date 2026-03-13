@@ -95,6 +95,7 @@ bash scripts/install_user_services.sh
 - AppStore 已切换为 aivudaOS 对齐的 `manifest.yaml` 规范。
 - 上传新应用与上传/编辑版本时，会先自动解析包内 manifest 回填表单。
 - 提交后，后端会使用表单内容重新生成并覆盖安装包中的 `manifest.yaml`。
+- 如需 app 级反向代理，可在 manifest 中设置 `caddyfile_config_path`（包内相对路径），由 AivudaOS 在安装/卸载/切版本时自动管理顶层 Caddy import 并 reload。
 
 ## 默认开发者账号
 

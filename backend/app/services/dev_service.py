@@ -49,6 +49,7 @@ def _known_manifest_fields() -> set[str]:
         "pre_uninstall",
         "update_this_version",
         "ui_index_path",
+        "caddyfile_config_path",
         "default_config_path",
         "config_schema_path",
         "default_config",
@@ -69,6 +70,7 @@ def _default_manifest_form() -> dict[str, Any]:
         "pre_uninstall": "",
         "update_this_version": "",
         "ui_index_path": "",
+        "caddyfile_config_path": "",
         "default_config_path": "",
         "config_schema_path": "",
         "default_config": {},
@@ -153,6 +155,7 @@ def _normalize_manifest_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "pre_uninstall",
         "update_this_version",
         "ui_index_path",
+        "caddyfile_config_path",
         "default_config_path",
         "config_schema_path",
     )
@@ -208,6 +211,7 @@ def _manifest_for_form(payload: dict[str, Any]) -> dict[str, Any]:
     form["pre_uninstall"] = normalized.get("pre_uninstall", "")
     form["update_this_version"] = normalized.get("update_this_version", "")
     form["ui_index_path"] = normalized.get("ui_index_path", "")
+    form["caddyfile_config_path"] = normalized.get("caddyfile_config_path", "")
     form["default_config_path"] = normalized.get("default_config_path", "")
     form["config_schema_path"] = normalized.get("config_schema_path", "")
     form["default_config"] = normalized.get("default_config", {})
