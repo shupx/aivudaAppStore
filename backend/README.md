@@ -33,7 +33,7 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
 
 当前 Caddy 默认行为：
 
-- HTTP `:8580`：仅 `/store*` 反代到后端公开接口，其他路径作为 `backend/data/files/apps` 文件服务
+- HTTPS `:8580`：仅 `/aivuda_app_store/store*` 反代到后端公开接口，其他路径作为 `backend/data/files/apps` 文件服务
 - HTTPS `:8543`：保留原有 appstore_site 路由（前端静态托管 + `/aivuda_app_store*` 反代）
 
 ## 上传逻辑

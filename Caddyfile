@@ -20,7 +20,11 @@
   }
 }
 
-http://:8580 {
+https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:8580, https://{$APPSTORE_PRIVATE_HTTPS_HOST:127.0.0.1}:8580 {
+  # only for public store/ api
+
+  tls internal
+
   handle /aivuda_app_store/store* {
     reverse_proxy 127.0.0.1:9001
   }

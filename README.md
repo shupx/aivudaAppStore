@@ -8,7 +8,7 @@ aivudaAppStore 现已拆分为独立的后端与前端目录。
 
 - 管理上传后台： https://39.102.60.150:8543 （手动允许证书）
 
-- 下载页面： http://39.102.60.150:8580
+- 下载页面： https://39.102.60.150:8580
 
 ## 目录
 
@@ -62,7 +62,7 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 
 ## 生产部署Caddy 启动（前端托管 + 后端代理）
 
-默认同时提供 HTTP `8580`（仅 `/store` 反代 + `backend/data/files/apps` 文件服务）和 HTTPS `8543`（保留原有 appstore_site 路由），见：
+默认同时提供 HTTPS `8580`（仅 `/aivuda_app_store/store` 反代 + `backend/data/files/apps` 文件服务）和 HTTPS `8543`（保留原有 appstore_site 路由），见：
 
 [backend/docs/deploy-caddy.md](backend/docs/deploy-caddy.md)
 
