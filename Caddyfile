@@ -20,7 +20,18 @@
   }
 }
 
-https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:443, https://{$APPSTORE_PRIVATE_HTTPS_HOST:127.0.0.1}:443 {
+http://:8580 {
+  handle /aivuda_app_store/store* {
+    reverse_proxy 127.0.0.1:9001
+  }
+
+  handle {
+    root * ./backend/data/files/apps
+    file_server browse
+  }
+}
+
+https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:8543, https://{$APPSTORE_PRIVATE_HTTPS_HOST:127.0.0.1}:8543 {
   tls internal
   import appstore_site
 }

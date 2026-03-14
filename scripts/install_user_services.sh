@@ -101,31 +101,6 @@ ensure_https_hosts() {
   fi
 }
 
-ensure_caddy_bind_443_permission() {
-  if [[ ! -x "${CADDY_BIN}" ]]; then
-    echo "Caddy binary not found or not executable: ${CADDY_BIN}" >&2
-    exit 1
-  fi
-
-  if command -v getcap >/dev/null 2>&1; then
-    if getcap "${CADDY_BIN}" 2>/dev/null | grep -q "cap_net_bind_service"; then
-      return
-    fi
-  fi
-
-  echo ""
-  echo "Caddy needs permission to bind privileged port 443."
-  echo "Running: sudo setcap cap_net_bind_service=+ep ${CADDY_BIN}"
-  sudo setcap cap_net_bind_service=+ep "${CADDY_BIN}"
-
-  if command -v getcap >/dev/null 2>&1; then
-    if ! getcap "${CADDY_BIN}" 2>/dev/null | grep -q "cap_net_bind_service"; then
-      echo "Failed to grant cap_net_bind_service on ${CADDY_BIN}" >&2
-      exit 1
-    fi
-  fi
-}
-
 ensure_user_linger_enabled() {
   local linger_state=""
   linger_state="$(loginctl show-user "${USER}" -p Linger --value 2>/dev/null || true)"
@@ -143,7 +118,6 @@ ensure_user_linger_enabled() {
 mkdir -p "${USER_SYSTEMD_DIR}"
 
 ensure_https_hosts
-ensure_caddy_bind_443_permission
 ensure_user_linger_enabled
 
 cat > "${STACK_UNIT}" <<EOF
