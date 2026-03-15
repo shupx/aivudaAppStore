@@ -57,13 +57,13 @@ def create_app() -> FastAPI:
     api.include_router(dev_router, prefix=APPSTORE_API_PREFIX)
     api.include_router(store_router, prefix=APPSTORE_API_PREFIX)
 
-    if FRONTEND_DEV_UI_DIST_DIR.exists():
-        # 开发环境提供静态文件(使得访问后端ip:port也能打开前端网页)，生产环境建议使用专门的静态文件服务器（如 nginx）来提供 UI 文件
-        api.mount(
-            "/",
-            StaticFiles(directory=str(FRONTEND_DEV_UI_DIST_DIR), html=True),
-            name="static",
-        )
+    # if FRONTEND_DEV_UI_DIST_DIR.exists():
+    #     # 开发环境提供静态文件(使得访问后端ip:port也能打开前端网页)，生产环境建议使用专门的静态文件服务器（如 nginx）来提供 UI 文件
+    #     api.mount(
+    #         "/",
+    #         StaticFiles(directory=str(FRONTEND_DEV_UI_DIST_DIR), html=True),
+    #         name="static",
+    #     )
 
     return api
 

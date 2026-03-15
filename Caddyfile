@@ -12,6 +12,13 @@
     handle @files {
       uri strip_prefix /aivuda_app_store/files
       root * ./backend/data/files
+
+    header {
+      Access-Control-Allow-Origin *
+      Access-Control-Allow-Methods "GET, OPTIONS"
+      Access-Control-Allow-Headers *
+    }
+    
       file_server
     }
 
@@ -35,6 +42,13 @@ https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:8580, https://{$APPSTORE_PRIVATE
   handle /aivuda_app_store/files/* {
     uri strip_prefix /aivuda_app_store/files
     root * ./backend/data/files
+
+    header {
+      Access-Control-Allow-Origin *
+      Access-Control-Allow-Methods "GET, OPTIONS"
+      Access-Control-Allow-Headers *
+    }
+
     file_server
   }
 
