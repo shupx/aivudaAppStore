@@ -174,13 +174,15 @@ systemctl --user restart aivuda-appstore.service
 
 ## 5. CORS 说明
 
-当前 CORS 由 FastAPI 处理（`backend/app/app.py` 中间件），Caddy 不再设置 CORS 响应头。
+当前 CORS 由 FastAPI 处理（`backend/app/app.py` 中间件）
 
 FastAPI 仅对公开接口开放跨域：
 
 - `/aivuda_app_store/store*`
 
 `/aivuda_app_store/dev/*` 等鉴权接口不开放跨域。
+
+`/aivuda_app_store/files/*` 静态文件的CORS响应头则由Caddyfile设置。
 
 ## 6. 路由行为
 

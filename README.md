@@ -62,7 +62,7 @@ PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 12
 
 ## 生产部署Caddy 启动（前端托管 + 后端代理）
 
-默认同时提供 HTTPS `8580`（`/aivuda_app_store/store*` 反代 + `/aivuda_app_store/files/*` 静态文件服务）和 HTTPS `8543`（保留原有 appstore_site 路由，且同样支持 `/aivuda_app_store/files/*` 静态文件下载），见：
+默认同时提供 HTTPS `8580`（`/aivuda_app_store/store*` 反代 + `/aivuda_app_store/files/*` 静态文件服务）和 HTTPS `8543`（`/aivuda_app_store*` 反代 + `/aivuda_app_store/files/*` 静态文件下载 + aivudaAppStore frontend网页托管），见：
 
 [backend/docs/deploy-caddy.md](backend/docs/deploy-caddy.md)
 
