@@ -182,7 +182,7 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "url": "/aivuda_app_store/store/apps/app_demo/versions/1.1.0/download",
+  "url": "/aivuda_app_store/files/apps/app_demo/1.1.0/package.zip",
   "sha256": "...",
   "size": 12345
 }
@@ -191,7 +191,8 @@ Authorization: Bearer <access_token>
 ### 4.5 下载安装包
 
 - **GET** `/aivuda_app_store/store/apps/{app_id}/versions/{version}/download`
-- 返回 `application/zip` 文件
+- 返回 `307` 重定向到 Caddy 静态文件路径 `/aivuda_app_store/files/*`
+- 实际文件由 Caddy 直接托管，不再由后端 `FileResponse` 流式输出
 
 ### 4.6 下载示例包
 

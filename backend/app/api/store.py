@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter
 from fastapi.responses import FileResponse
+from starlette.responses import Response
 
 from app.services.store_service import (
     store_app_detail as service_store_app_detail,
@@ -45,5 +46,5 @@ async def store_download_url(app_id: str, version: str) -> dict[str, Any]:
 
 
 @router.get("/apps/{app_id}/versions/{version}/download")
-async def store_download_file(app_id: str, version: str) -> FileResponse:
+async def store_download_file(app_id: str, version: str) -> Response:
     return service_store_download_file(app_id, version)

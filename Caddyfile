@@ -6,8 +6,15 @@
   encode zstd gzip
 
   @api path /aivuda_app_store*
+  @files path /aivuda_app_store/files/*
 
   route {
+    handle @files {
+      uri strip_prefix /aivuda_app_store/files
+      root * ./backend/data/files
+      file_server
+    }
+
     handle @api {
       reverse_proxy 127.0.0.1:9001
     }
@@ -24,6 +31,12 @@ https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:8580, https://{$APPSTORE_PRIVATE
   # only for public store/ api
 
   tls internal
+
+  handle /aivuda_app_store/files/* {
+    uri strip_prefix /aivuda_app_store/files
+    root * ./backend/data/files
+    file_server
+  }
 
   handle /aivuda_app_store/store* {
     reverse_proxy 127.0.0.1:9001

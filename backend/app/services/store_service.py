@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Any
 import zipfile
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
+from starlette.responses import RedirectResponse
 
 from app.core.settings import APPSTORE_API_PREFIX, FILES_DIR, ROOT
 from app.services.db import build_manifest, db_conn, get_targets, pick_largest_published_version
@@ -145,33 +147,25 @@ def store_manifest(app_id: str, version: str) -> dict[str, Any]:
 
 
 def store_download_url(app_id: str, version: str) -> dict[str, Any]:
-    with db_conn() as conn:
-        app_row = conn.execute("SELECT id FROM app WHERE app_id = ?", (app_id,)).fetchone()
-        if not app_row:
-            raise HTTPException(status_code=404, detail="App not found")
-
-        version_row = conn.execute(
-            "SELECT id, status FROM app_version WHERE app_id = ? AND version = ?",
-            (app_row["id"], version),
-        ).fetchone()
-        if not version_row or version_row["status"] != "published":
-            raise HTTPException(status_code=404, detail="Version not found or not published")
-
-        target = conn.execute(
-            "SELECT * FROM app_target WHERE version_id = ?",
-            (version_row["id"],),
-        ).fetchone()
-        if not target:
-            raise HTTPException(status_code=404, detail="No downloadable package for this version")
+    target = _get_download_target(app_id, version)
+    static_url = _build_caddy_file_url(str(target["artifact_relpath"] or ""))
 
     return {
-        "url": f"{APPSTORE_API_PREFIX}/store/apps/{app_id}/versions/{version}/download",
+        "url": static_url,
         "sha256": target["artifact_sha256"] or "",
         "size": target["artifact_size"] or 0,
     }
 
 
-def store_download_file(app_id: str, version: str) -> FileResponse:
+def store_download_file(app_id: str, version: str) -> RedirectResponse:
+    target = _get_download_target(app_id, version)
+    static_url = _build_caddy_file_url(str(target["artifact_relpath"] or ""))
+    return RedirectResponse(url=static_url, status_code=307)
+    # Here, we use caddy to handle static file （避免后端FileResponse在高并发、大文件情况下对后端程序压力比较大）
+    #TODO: 大规模文件托管应该用对象存储服务OBS，minIO之类的分布式存储文件服务
+
+
+def _get_download_target(app_id: str, version: str) -> Any:
     with db_conn() as conn:
         app_row = conn.execute("SELECT id FROM app WHERE app_id = ?", (app_id,)).fetchone()
         if not app_row:
@@ -191,17 +185,26 @@ def store_download_file(app_id: str, version: str) -> FileResponse:
         if not target:
             raise HTTPException(status_code=404, detail="No downloadable package for this version")
 
-    relpath = Path(str(target["artifact_relpath"]))
+    relpath = Path(str(target["artifact_relpath"] or ""))
+    if relpath.is_absolute() or any(part == ".." for part in relpath.parts):
+        raise HTTPException(status_code=400, detail="Invalid package path")
+
     package_path = (FILES_DIR / relpath).resolve()
     files_root = FILES_DIR.resolve()
     try:
         package_path.relative_to(files_root)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid package path")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid package path") from exc
+
     if not package_path.exists() or not package_path.is_file():
         raise HTTPException(status_code=404, detail="Package file not found")
 
-    download_name = f"{app_id}-{version}.zip"
-    return FileResponse(package_path, media_type="application/zip", filename=download_name)
-    #TODO: use nginx X-Accel-Redirect to handle static file （这里直接后端FileResponse在高并发、大文件情况下对后端程序压力比较大）
-    #TODO: 大规模文件托管应该用对象存储服务OBS，minIO之类的分布式存储文件服务
+    return target
+
+
+def _build_caddy_file_url(artifact_relpath: str) -> str:
+    relpath = Path(str(artifact_relpath or ""))
+    encoded = quote(relpath.as_posix().lstrip("/"), safe="/")
+    if not encoded:
+        raise HTTPException(status_code=400, detail="Invalid package path")
+    return f"{APPSTORE_API_PREFIX}/files/{encoded}"
