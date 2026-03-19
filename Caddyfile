@@ -45,6 +45,7 @@
 (appstore_api_public) {
   # only for public store/ api
   handle /aivuda_app_store/store* {
+    encode zstd gzip
     reverse_proxy 127.0.0.1:9001
   }
 
