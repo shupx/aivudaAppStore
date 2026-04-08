@@ -1,5 +1,6 @@
 {
   auto_https disable_redirects
+  admin off # Disable 'caddy reload', as it will listen on 2019, which may cause conflicts with other caddy instances. This Caddyfile does not need to be reloaded at runtime.
 }
 
 (file_server) {
