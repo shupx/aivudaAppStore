@@ -11,6 +11,7 @@ Install from PyPI or from a wheel:
 ```bash
 pip install aivudaappstore
 # or
+pip install -i https://pypi.tuna.tsinghua.edu.cn/simple aivudaappstore # may not be the latest
 pip install aivudaappstore-0.3.0.devYYYYMMDDNN-py3-none-any.whl
 ```
 
