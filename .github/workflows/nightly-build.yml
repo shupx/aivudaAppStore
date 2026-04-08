@@ -6,13 +6,19 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: Force rebuild even when HEAD matches the last successful nightly run
+        description: Force rebuild and republish even when HEAD matches the last successful nightly run
         required: false
         default: false
+        type: boolean
+      upload_pypi:
+        description: Upload built distributions to PyPI
+        required: false
+        default: true
         type: boolean
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: nightly-build
@@ -27,6 +33,9 @@ jobs:
       build_date: ${{ steps.meta.outputs.build_date }}
       build_seq: ${{ steps.meta.outputs.build_seq }}
       head_sha: ${{ steps.meta.outputs.head_sha }}
+      trigger_mode: ${{ steps.meta.outputs.trigger_mode }}
+      forced_build: ${{ steps.meta.outputs.forced_build }}
+      upload_pypi: ${{ steps.meta.outputs.upload_pypi }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,11 +47,14 @@ jobs:
         shell: bash
         env:
           FORCE_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+          UPLOAD_PYPI: ${{ github.event_name != 'workflow_dispatch' || inputs.upload_pypi }}
         run: |
           echo "build_date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
           echo "build_seq=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "trigger_mode=${GITHUB_EVENT_NAME}" >> "$GITHUB_OUTPUT"
           echo "forced_build=${FORCE_BUILD}" >> "$GITHUB_OUTPUT"
+          echo "upload_pypi=${UPLOAD_PYPI}" >> "$GITHUB_OUTPUT"
 
       - name: Compare against latest successful nightly run
         id: release-check
@@ -57,6 +69,7 @@ jobs:
             const forceBuild = String(process.env.FORCE_BUILD || '').toLowerCase() === 'true';
 
             if (forceBuild) {
+              core.info('Force rebuild requested for workflow_dispatch; skipping prior-run SHA comparison.');
               core.setOutput('should_build', 'true');
               return;
             }
@@ -80,6 +93,9 @@ jobs:
               );
               const lastSha = previousSuccessfulRun?.head_sha || '';
 
+              core.info(`Current HEAD: ${process.env.HEAD_SHA}`);
+              core.info(`Previous successful nightly SHA: ${lastSha || 'not found'}`);
+
               if (lastSha === process.env.HEAD_SHA) {
                 shouldBuild = false;
               }
@@ -88,6 +104,19 @@ jobs:
             }
 
             core.setOutput('should_build', shouldBuild ? 'true' : 'false');
+
+      - name: Write summary
+        shell: bash
+        run: |
+          {
+            echo "## Nightly build decision"
+            echo
+            echo "- Trigger mode: \`${{ steps.meta.outputs.trigger_mode }}\`"
+            echo "- Forced build: \`${{ steps.meta.outputs.forced_build }}\`"
+            echo "- Upload PyPI: \`${{ steps.meta.outputs.upload_pypi }}\`"
+            echo "- HEAD SHA: \`${{ steps.meta.outputs.head_sha }}\`"
+            echo "- Should build: \`${{ steps.release-check.outputs.should_build }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: Build Python distributions
@@ -206,41 +235,125 @@ jobs:
           name: nightly-dist
           path: dist
 
+      - name: Show distribution files
+        shell: bash
+        run: find dist -maxdepth 1 -type f | sort
+
       - name: Delete existing nightly release
         uses: actions/github-script@v7
         with:
           script: |
+            let release = null;
+
             try {
               const response = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag: 'nightly',
               });
-              await github.rest.repos.deleteRelease({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                release_id: response.data.id,
-              });
+              release = response.data;
             } catch (error) {
               if (error.status !== 404) {
                 throw error;
               }
             }
 
-      - name: Delete existing nightly tag
-        shell: bash
-        run: |
-          git init .
-          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git fetch --tags origin
-          git tag -d nightly >/dev/null 2>&1 || true
+            if (!release) {
+              const { data } = await github.rest.repos.listReleases({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100,
+              });
 
-      - name: Create nightly release
+              release = (data || []).find((item) =>
+                item.tag_name === 'nightly' || item.name === 'Nightly Build'
+              ) || null;
+            }
+
+            if (!release) {
+              core.info('No existing nightly release found.');
+              return;
+            }
+
+            core.info(`Deleting nightly release ${release.id}`);
+            await github.rest.repos.deleteRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+            });
+
+      - name: Move nightly tag to current commit
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ needs.check-changes.outputs.head_sha }}
+        with:
+          script: |
+            try {
+              await github.rest.git.updateRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: 'tags/nightly',
+                sha: process.env.HEAD_SHA,
+                force: true,
+              });
+              core.info(`Updated tag nightly to ${process.env.HEAD_SHA}`);
+            } catch (error) {
+              if (
+                error.status === 404 ||
+                (error.status === 422 && /Reference does not exist/i.test(error.message || ''))
+              ) {
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: 'refs/tags/nightly',
+                  sha: process.env.HEAD_SHA,
+                });
+                core.info(`Created tag nightly at ${process.env.HEAD_SHA}`);
+              } else {
+                throw error;
+              }
+            }
+
+      - name: Publish nightly release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly
           name: Nightly Build
-          prerelease: true
+          prerelease: false
+          make_latest: false
+          target_commitish: ${{ needs.check-changes.outputs.head_sha }}
+          body: |
+            Automated nightly build for commit `${{ needs.check-changes.outputs.head_sha }}`.
+
+            Build date: `${{ needs.check-changes.outputs.build_date }}`
+            Build sequence: `${{ needs.check-changes.outputs.build_seq }}`
+            Trigger mode: `${{ needs.check-changes.outputs.trigger_mode }}`
+            Forced build: `${{ needs.check-changes.outputs.forced_build }}`
+            Upload PyPI: `${{ needs.check-changes.outputs.upload_pypi }}`
+
+            <!-- nightly-source-sha: ${{ needs.check-changes.outputs.head_sha }} -->
           files: |
-            dist/*.whl
-            dist/*.tar.gz
+            dist/*
+          overwrite_files: true
+
+  publish-pypi:
+    name: Publish nightly package to PyPI
+    needs:
+      - check-changes
+      - build
+      - smoke
+    if: needs.check-changes.outputs.should_build == 'true' && needs.check-changes.outputs.upload_pypi == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+    steps:
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-dist
+          path: dist
+
+      - name: Publish to PyPI with trusted publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist

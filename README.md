@@ -92,6 +92,7 @@ npm install
 npm run build
 cd ../../..
 AIVUDAAPPSTORE_BUILD_SEQ=01 python -m build
+# PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple python -m build  # use pypi mirror
 ```
 
 The wheel includes only `aivudaappstore/resources/ui/dist`, while the sdist keeps the frontend source and excludes `dist` and `node_modules`.
