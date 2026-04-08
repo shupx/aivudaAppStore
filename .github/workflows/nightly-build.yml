@@ -1,0 +1,246 @@
+name: nightly-build
+
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Force rebuild even when HEAD matches the last successful nightly run
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: false
+
+jobs:
+  check-changes:
+    name: Check nightly source changes
+    runs-on: ubuntu-24.04
+    outputs:
+      should_build: ${{ steps.release-check.outputs.should_build }}
+      build_date: ${{ steps.meta.outputs.build_date }}
+      build_seq: ${{ steps.meta.outputs.build_seq }}
+      head_sha: ${{ steps.meta.outputs.head_sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Compute build metadata
+        id: meta
+        shell: bash
+        env:
+          FORCE_BUILD: ${{ github.event_name == 'workflow_dispatch' && inputs.force || false }}
+        run: |
+          echo "build_date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          echo "build_seq=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "forced_build=${FORCE_BUILD}" >> "$GITHUB_OUTPUT"
+
+      - name: Compare against latest successful nightly run
+        id: release-check
+        uses: actions/github-script@v7
+        env:
+          HEAD_SHA: ${{ steps.meta.outputs.head_sha }}
+          FORCE_BUILD: ${{ steps.meta.outputs.forced_build }}
+        with:
+          script: |
+            let shouldBuild = true;
+            const workflowId = '.github/workflows/nightly-build.yml';
+            const forceBuild = String(process.env.FORCE_BUILD || '').toLowerCase() === 'true';
+
+            if (forceBuild) {
+              core.setOutput('should_build', 'true');
+              return;
+            }
+
+            try {
+              const branch = context.ref.startsWith('refs/heads/')
+                ? context.ref.replace('refs/heads/', '')
+                : undefined;
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: workflowId,
+                ...(branch ? { branch } : {}),
+                status: 'success',
+                per_page: 10,
+              });
+
+              const currentRunId = Number(process.env.GITHUB_RUN_ID || '0');
+              const previousSuccessfulRun = (data.workflow_runs || []).find(
+                (run) => run.id !== currentRunId
+              );
+              const lastSha = previousSuccessfulRun?.head_sha || '';
+
+              if (lastSha === process.env.HEAD_SHA) {
+                shouldBuild = false;
+              }
+            } catch (error) {
+              core.warning(`Unable to inspect prior nightly runs: ${error.message}`);
+            }
+
+            core.setOutput('should_build', shouldBuild ? 'true' : 'false');
+
+  build:
+    name: Build Python distributions
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: aivudaappstore/resources/ui/package-lock.json
+
+      - name: Install Python build tool
+        shell: bash
+        run: python -m pip install --upgrade build
+
+      - name: Build UI assets
+        shell: bash
+        working-directory: aivudaappstore/resources/ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Clean previous Python distributions
+        shell: bash
+        run: rm -rf dist build aivudaappstore.egg-info
+
+      - name: Build wheel and sdist
+        shell: bash
+        env:
+          AIVUDAAPPSTORE_BUILD_DATE: ${{ needs.check-changes.outputs.build_date }}
+          AIVUDAAPPSTORE_BUILD_SEQ: ${{ needs.check-changes.outputs.build_seq }}
+        run: python -m build
+
+      - name: Verify distributions exist
+        shell: bash
+        run: |
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          sdists=(dist/*.tar.gz)
+          test "${#wheels[@]}" -gt 0
+          test "${#sdists[@]}" -gt 0
+          printf '%s\n' "${wheels[@]}" "${sdists[@]}" | sort
+
+      - name: Verify wheel and sdist contents
+        shell: bash
+        run: |
+          wheel="$(ls dist/*.whl | head -n 1)"
+          sdist="$(ls dist/*.tar.gz | head -n 1)"
+          unzip -l "${wheel}" | tee /tmp/wheel.txt
+          tar -tzf "${sdist}" | tee /tmp/sdist.txt
+          grep -q 'aivudaappstore/resources/ui/dist/' /tmp/wheel.txt
+          ! grep -q 'aivudaappstore/resources/ui/src/' /tmp/wheel.txt
+          ! grep -q 'aivudaappstore/resources/ui/node_modules/' /tmp/wheel.txt
+          grep -q 'aivudaappstore/resources/ui/src/' /tmp/sdist.txt
+          ! grep -q 'aivudaappstore/resources/ui/node_modules/' /tmp/sdist.txt
+          ! grep -q 'aivudaappstore/resources/ui/dist/' /tmp/sdist.txt
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-dist
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke:
+    name: Smoke test wheel on Python 3.8
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-dist
+          path: dist
+
+      - name: Set up Python 3.8
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Install wheel and smoke test
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          aivudaappstore --help
+          aivudaappstore --version
+          python -c 'import aivudaappstore.backend.main'
+
+  release:
+    name: Publish nightly release
+    needs:
+      - check-changes
+      - build
+      - smoke
+    if: needs.check-changes.outputs.should_build == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-dist
+          path: dist
+
+      - name: Delete existing nightly release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const response = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: 'nightly',
+              });
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: response.data.id,
+              });
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
+
+      - name: Delete existing nightly tag
+        shell: bash
+        run: |
+          git init .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --tags origin
+          git tag -d nightly >/dev/null 2>&1 || true
+
+      - name: Create nightly release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: Nightly Build
+          prerelease: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz

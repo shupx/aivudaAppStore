@@ -1,0 +1,5 @@
+include README.md
+include README_dev.md
+include requirements.txt
+include publish_aivudaappstore_pypi.sh
+recursive-include aivudaappstore/resources *

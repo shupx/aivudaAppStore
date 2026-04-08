@@ -1,109 +1,99 @@
-# aivudaAppStore
+# Aivuda AppStore
 
-aivudaAppStore 现已拆分为独立的后端与前端目录。
+Aivuda AppStore manages the applications used by aivudaOS.
 
-支持本地部署和服务器部署。
+`aivudaappstore` is the packaged Python distribution of Aivuda AppStore. After installation it provides a unified CLI and stores all runtime data under `${HOME}/aivudaAppStore_ws`.
 
-一个已经部署在阿里云服务器上的例子：
+## Install
 
-- 管理上传后台： https://39.102.60.150:8543 （手动允许证书）
-
-- 下载页面： https://39.102.60.150:8580
-
-## 目录
-
-- `backend/`: python FastAPI 后端（开发者管理 + 公开商店接口）
-- `frontend_dev/`: 开发者管理前端（Vue 3 + Vite）
-
-## 开发环境快速启动
-
-1. 启动后端
+Install from PyPI or from a wheel:
 
 ```bash
-cd backend
-python3 -m pip install --user -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 9001 --reload
+pip install aivudaappstore
+# or
+pip install aivudaappstore-0.3.0.devYYYYMMDDNN-py3-none-any.whl
 ```
 
-2. 启动前端（应用开发者界面）
+It is recommended to ensure your user-local bin directory is in `PATH`:
 
 ```bash
-cd frontend_dev
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+## First Start
+
+Run the install command once to prepare runtime dependencies, download Caddy, and create the user-level systemd service:
+
+```bash
+aivudaappstore install
+```
+
+During installation you will be prompted for:
+
+- `APPSTORE_PUBLIC_HTTPS_HOST`: public IP for the cloud server deploying aivudaappstore;
+- `APPSTORE_PRIVATE_HTTPS_HOST`: NAT IP for the cloud server deploying aivudaappstore.
+
+The default runtime workspace is:
+
+- `$HOME/aivudaAppStore_ws/data`
+- `$HOME/aivudaAppStore_ws/config`
+- `$HOME/aivudaAppStore_ws/.tools`
+- `$HOME/aivudaAppStore_ws/samples`
+
+## Usage
+
+Common commands:
+
+```bash
+aivudaappstore --help
+aivudaappstore --version
+aivudaappstore install
+aivudaappstore web
+aivudaappstore status
+aivudaappstore start
+aivudaappstore stop
+aivudaappstore restart
+aivudaappstore enable-autostart
+aivudaappstore disable-autostart
+aivudaappstore download-caddy
+aivudaappstore uninstall
+```
+
+To print the current web addresses:
+
+```bash
+aivudaappstore web
+# or
+aivudaappstore status
+```
+
+Default ports:
+
+- Admin UI: `https://<private-host>:8543`
+- Public store: `https://<public-host>:8580`
+- Internal backend: `127.0.0.1:9001`
+
+## Build From Source
+
+```bash
+git clone https://gitee.com/buaa_iooda/aivudaAppStore.git --recurse-submodules
+cd aivudaAppStore
+git submodule update --init --recursive
+pip install -e .
+# pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -e .  # use pypi mirror for build
+```
+
+Build wheel and sdist locally:
+
+```bash
+cd aivudaappstore/resources/ui
 npm install
-npm run dev
-```
-
-> 开发环境由 `vite.config.js` 代理 `/aivuda_app_store` 到 `http://127.0.0.1:9001`，无需手工输入 Backend URL。
-
-打开 `http://127.0.0.1:5174`进入前端网页
-
-如果还没安装node和npm，建议手动安装24版的(仅开发需要)：
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
-sudo apt remove libnode-dev nodejs #删除旧的nodejs
-sudo apt install -y nodejs
-node -v # v24.14.0
-npm -v  # 11.9.0
-```
-
-
-## 生产部署（本地快速）
-
-简单一点的话，直接启动后端（fastapi后端也托管了前端静态文件，虽然性能差点），没有https，只适合本地启动：
-
-```bash
-cd aivudaAppStore/
-PYTHONPATH=backend gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app -b 127.0.0.1:9001
-```
-
-然后浏览器输入http://127.0.0.1:9001，前后端都在这。
-
-
-## 生产部署Caddy 启动（前端托管 + 后端代理）
-
-默认同时提供 HTTPS `8580`（`/aivuda_app_store/store*` 反代 + `/aivuda_app_store/files/*` 静态文件服务）和 HTTPS `8543`（`/aivuda_app_store*` 反代 + `/aivuda_app_store/files/*` 静态文件下载 + aivudaAppStore frontend网页托管），见：
-
-[backend/docs/deploy-caddy.md](backend/docs/deploy-caddy.md)
-
-先编译生成前端静态文件：
-
-```bash
-cd frontend_dev
 npm run build
+cd ../../..
+AIVUDAAPPSTORE_BUILD_SEQ=01 python -m build
 ```
 
-在仓库根目录可直接启动安装自启动脚本：
+The wheel includes only `aivudaappstore/resources/ui/dist`, while the sdist keeps the frontend source and excludes `dist` and `node_modules`.
 
-```bash
-bash scripts/install_user_services.sh
-```
-
-上面脚本会在安装时要求输入两个 HTTPS 地址：
-
-- 公网 IP/域名：`APPSTORE_PUBLIC_HTTPS_HOST`
-- 内网 IP/域名：`APPSTORE_PRIVATE_HTTPS_HOST`
-
-输入内网地址时，脚本会先列出当前服务器检测到的本机 IPv4 地址供选择，也可以手工输入。
-
-并写入 `aivuda-appstore.service` 的环境变量：
-
-- `APPSTORE_PUBLIC_HTTPS_HOST`
-- `APPSTORE_PRIVATE_HTTPS_HOST`
-
-`Caddyfile` 会读取这两个环境变量来绑定 HTTPS 站点。
-
-设置好后可直接访问 `https://<公网IP或域名>:8543` 或 `https://<内网IP或域名>:8543`。
-
-
-## 安装包说明（manifest.yaml）
-
-- AppStore 已切换为 aivudaOS 对齐的 `manifest.yaml` 规范。
-- 上传新应用与上传/编辑版本时，会先自动解析包内 manifest 回填表单。
-- 提交后，后端会使用表单内容重新生成并覆盖安装包中的 `manifest.yaml`。
-- 如需 app 级反向代理，可在 manifest 中设置 `caddyfile_config_path`（包内相对路径），由 AivudaOS 在安装/卸载/切版本时自动管理顶层 Caddy import 并 reload。
-
-## 默认开发者账号
-
-- 用户名: `admin`
-- 密码: `admin123`
+For development details, see [README_dev.md](README_dev.md).

@@ -1,0 +1,61 @@
+{
+  auto_https disable_redirects
+}
+
+(file_server) {
+  @files path /aivuda_app_store/files/*
+  @file_pkg path_regexp file_pkg ^/aivuda_app_store/files/apps/([^/]+)/([^/]+)/[^/]+$
+
+  handle @files {
+    header @file_pkg Content-Disposition "attachment; filename=\"{re.file_pkg.1}-{re.file_pkg.2}.zip\""
+    uri strip_prefix /aivuda_app_store/files
+    root * {$AIVUDAAPPSTORE_FILES_ROOT}
+
+    header {
+      Access-Control-Allow-Origin *
+      Access-Control-Allow-Methods "GET, OPTIONS"
+      Access-Control-Allow-Headers *
+    }
+
+    file_server
+  }
+}
+
+(appstore_api_all) {
+  encode zstd gzip
+  @allapi path /aivuda_app_store/*
+
+  handle @allapi {
+    reverse_proxy 127.0.0.1:9001
+  }
+
+  handle {
+    root * {$AIVUDAAPPSTORE_FRONTEND_DIST}
+    try_files {path} /index.html
+    file_server
+  }
+}
+
+(appstore_api_public) {
+  handle /aivuda_app_store/store* {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:9001
+  }
+
+  handle {
+    root * {$AIVUDAAPPSTORE_FILES_APPS_ROOT}
+    file_server browse
+  }
+}
+
+https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:8580, https://{$APPSTORE_PRIVATE_HTTPS_HOST:127.0.0.1}:8580 {
+  tls internal
+  import file_server
+  import appstore_api_public
+}
+
+https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:8543, https://{$APPSTORE_PRIVATE_HTTPS_HOST:127.0.0.1}:8543 {
+  tls internal
+  import file_server
+  import appstore_api_all
+}
