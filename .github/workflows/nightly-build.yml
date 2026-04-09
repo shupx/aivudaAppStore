@@ -41,6 +41,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+          token: ${{ secrets.GITEE_TOKEN }}
           submodules: recursive
 
       - name: Compute build metadata
@@ -128,6 +129,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          token: ${{ secrets.GITEE_TOKEN }}
           submodules: recursive
 
       - name: Set up Python
