@@ -30,7 +30,7 @@ Run the install command once to prepare runtime dependencies, download Caddy, an
 aivudaappstore install
 ```
 
-During installation you will be prompted for:
+During installation you will be prompted for (optional, you can press Enter to skip if deploying for local use):
 
 - `APPSTORE_PUBLIC_HTTPS_HOST`: public IP for the cloud server deploying aivudaappstore;
 - `APPSTORE_PRIVATE_HTTPS_HOST`: NAT IP for the cloud server deploying aivudaappstore.
