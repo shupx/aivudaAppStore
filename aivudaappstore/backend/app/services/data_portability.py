@@ -271,6 +271,173 @@ def list_exportable_apps() -> Dict[str, Any]:
     }
 
 
+def _create_subset_repo_db(target_db_path: Path, selected_app_ids: Optional[List[str]]) -> None:
+    source_db_path = DATA_DIR / "repo.db"
+    if not source_db_path.exists():
+        raise HTTPException(status_code=404, detail="repo.db was not found")
+
+    with sqlite3.connect(str(source_db_path)) as source_conn, sqlite3.connect(str(target_db_path)) as target_conn:
+        source_conn.row_factory = sqlite3.Row
+        target_conn.execute("PRAGMA foreign_keys = OFF")
+
+        schema_rows = source_conn.execute(
+            """
+            SELECT type, name, sql
+            FROM sqlite_master
+            WHERE sql IS NOT NULL
+              AND type IN ('table', 'index')
+              AND name NOT LIKE 'sqlite_%'
+            ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END, name
+            """
+        ).fetchall()
+        for row in schema_rows:
+            if row["sql"]:
+                target_conn.execute(row["sql"])
+
+        if selected_app_ids is None:
+            selected_app_rows = source_conn.execute(
+                """
+                SELECT id, app_id, owner_user_id, name, description, created_at, updated_at
+                FROM app
+                ORDER BY id
+                """
+            ).fetchall()
+        elif selected_app_ids:
+            placeholders = ",".join(["?"] * len(selected_app_ids))
+            selected_app_rows = source_conn.execute(
+                f"""
+                SELECT id, app_id, owner_user_id, name, description, created_at, updated_at
+                FROM app
+                WHERE app_id IN ({placeholders})
+                ORDER BY id
+                """,
+                selected_app_ids,
+            ).fetchall()
+        else:
+            selected_app_rows = []
+
+        selected_app_pks = [row["id"] for row in selected_app_rows]
+        if selected_app_rows:
+            target_conn.executemany(
+                """
+                INSERT INTO app (id, app_id, owner_user_id, name, description, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        row["id"],
+                        row["app_id"],
+                        row["owner_user_id"],
+                        row["name"],
+                        row["description"],
+                        row["created_at"],
+                        row["updated_at"],
+                    )
+                    for row in selected_app_rows
+                ],
+            )
+
+        version_rows = []
+        target_rows = []
+        audit_rows = []
+        if selected_app_pks:
+            placeholders = ",".join(["?"] * len(selected_app_pks))
+            version_rows = source_conn.execute(
+                f"""
+                SELECT id, app_id, version, description, status, published_at, created_at, updated_at
+                FROM app_version
+                WHERE app_id IN ({placeholders})
+                ORDER BY id
+                """,
+                selected_app_pks,
+            ).fetchall()
+            version_ids = [row["id"] for row in version_rows]
+
+            if version_rows:
+                target_conn.executemany(
+                    """
+                    INSERT INTO app_version (id, app_id, version, description, status, published_at, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            row["id"],
+                            row["app_id"],
+                            row["version"],
+                            row["description"],
+                            row["status"],
+                            row["published_at"],
+                            row["created_at"],
+                            row["updated_at"],
+                        )
+                        for row in version_rows
+                    ],
+                )
+
+            if version_ids:
+                version_placeholders = ",".join(["?"] * len(version_ids))
+                target_rows = source_conn.execute(
+                    f"""
+                    SELECT id, version_id, artifact_relpath, artifact_sha256, artifact_size, created_at, updated_at
+                    FROM app_target
+                    WHERE version_id IN ({version_placeholders})
+                    ORDER BY id
+                    """,
+                    version_ids,
+                ).fetchall()
+                if target_rows:
+                    target_conn.executemany(
+                        """
+                        INSERT INTO app_target (
+                            id, version_id, artifact_relpath, artifact_sha256, artifact_size, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        [
+                            (
+                                row["id"],
+                                row["version_id"],
+                                row["artifact_relpath"],
+                                row["artifact_sha256"],
+                                row["artifact_size"],
+                                row["created_at"],
+                                row["updated_at"],
+                            )
+                            for row in target_rows
+                        ],
+                    )
+
+            audit_rows = source_conn.execute(
+                f"""
+                SELECT id, app_id, version_id, actor_user_id, action, detail_json, created_at
+                FROM app_audit_log
+                WHERE app_id IN ({placeholders})
+                ORDER BY id
+                """,
+                selected_app_pks,
+            ).fetchall()
+            if audit_rows:
+                target_conn.executemany(
+                    """
+                    INSERT INTO app_audit_log (id, app_id, version_id, actor_user_id, action, detail_json, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            row["id"],
+                            row["app_id"],
+                            row["version_id"],
+                            row["actor_user_id"],
+                            row["action"],
+                            row["detail_json"],
+                            row["created_at"],
+                        )
+                        for row in audit_rows
+                    ],
+                )
+
+        target_conn.commit()
+
+
 def export_data_archive(selected_app_ids_json: str = "") -> FileResponse:
     TMP_DIR.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -278,12 +445,11 @@ def export_data_archive(selected_app_ids_json: str = "") -> FileResponse:
     archive_path = TMP_DIR / archive_name
     selected_app_ids = _parse_selected_app_ids(selected_app_ids_json)
     allowed_relpaths = None
-    allowed_app_ids = None
+    subset_db_path = TMP_DIR / f"repo_export_{stamp}_{now_ts()}.db"
 
     if selected_app_ids is not None:
-        allowed_app_ids = set(selected_app_ids)
         allowed_relpaths = {"repo.db"}
-        if allowed_app_ids:
+        if selected_app_ids:
             with db_conn() as conn:
                 placeholders = ",".join(["?"] * len(selected_app_ids))
                 rows = conn.execute(
@@ -300,23 +466,30 @@ def export_data_archive(selected_app_ids_json: str = "") -> FileResponse:
                 relpath = str(row["artifact_relpath"] or "").strip()
                 if relpath:
                     allowed_relpaths.add(Path(relpath).as_posix())
+    try:
+        _create_subset_repo_db(subset_db_path, selected_app_ids)
 
-    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for path in sorted(DATA_DIR.rglob("*")):
-            rel = path.relative_to(DATA_DIR)
-            if not rel.parts or rel.parts[0] == "tmp":
-                continue
-            rel_posix = rel.as_posix()
-            if allowed_relpaths is not None:
-                if rel.parts[0] == "files":
-                    if rel_posix[len("files/") :] not in allowed_relpaths:
-                        continue
-                elif rel_posix not in allowed_relpaths:
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.write(subset_db_path, (Path("data") / "repo.db").as_posix())
+            for path in sorted(DATA_DIR.rglob("*")):
+                rel = path.relative_to(DATA_DIR)
+                if not rel.parts or rel.parts[0] in {"tmp"}:
                     continue
-            arcname = Path("data") / rel
-            if path.is_dir():
-                continue
-            zf.write(path, arcname.as_posix())
+                rel_posix = rel.as_posix()
+                if rel_posix == "repo.db":
+                    continue
+                if allowed_relpaths is not None:
+                    if rel.parts[0] == "files":
+                        if rel_posix[len("files/") :] not in allowed_relpaths:
+                            continue
+                    elif rel_posix not in allowed_relpaths:
+                        continue
+                arcname = Path("data") / rel
+                if path.is_dir():
+                    continue
+                zf.write(path, arcname.as_posix())
+    finally:
+        _cleanup_path(subset_db_path)
 
     return FileResponse(
         path=str(archive_path),

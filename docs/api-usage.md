@@ -168,6 +168,7 @@ Authorization: Bearer <access_token>
 
 - 该接口只导出 AppStore 数据库和已发布的文件数据，不导出运行时临时文件。
 - 前端会先拉取可导出 app 列表，用户勾选需要导出的 app，支持全选和取消全选。
+- 归档中的 `data/repo.db` 会被裁剪为仅包含所选 app 的 `app`、`app_version`、`app_target`、`app_audit_log` 数据。
 - 下载文件名形如 `aivudaAppStore-data-YYYYMMDD-HHMMSS.zip`。
 
 ### 3.10 预检数据库导入包
