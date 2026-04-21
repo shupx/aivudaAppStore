@@ -136,6 +136,111 @@ Authorization: Bearer <access_token>
 
 - **DELETE** `/aivuda_app_store/dev/apps/{app_id}`
 
+### 3.9 导出数据库
+
+- **GET** `/aivuda_app_store/dev/data/export/apps`
+- 返回当前库中可导出的 app 列表，用于前端勾选
+
+返回示例：
+
+```json
+{
+  "ok": true,
+  "apps": [
+    {
+      "app_id": "app_demo",
+      "name": "Demo",
+      "description": "Demo app",
+      "version_count": 2
+    }
+  ]
+}
+```
+
+- **GET** `/aivuda_app_store/dev/data/export`
+- Query 参数：
+  - `selected_app_ids`（JSON 数组字符串，例如 `["app_demo","app_other"]`）
+- 返回：`application/zip`
+- 内容：运行时 `$HOME/aivudaAppStore_ws/data` 目录，归档内路径以 `data/` 开头
+- 排除：`data/tmp`
+
+说明：
+
+- 该接口只导出 AppStore 数据库和已发布的文件数据，不导出运行时临时文件。
+- 前端会先拉取可导出 app 列表，用户勾选需要导出的 app，支持全选和取消全选。
+- 下载文件名形如 `aivudaAppStore-data-YYYYMMDD-HHMMSS.zip`。
+
+### 3.10 预检数据库导入包
+
+- **POST** `/aivuda_app_store/dev/data/import/inspect`
+- `Content-Type: multipart/form-data`
+- 表单字段：
+  - `data_zip`（必填，导出的 data zip）
+
+成功返回示例：
+
+```json
+{
+  "ok": true,
+  "summary": {
+    "app_count": 2,
+    "version_count": 3,
+    "artifact_count": 3
+  },
+  "apps": [
+    {
+      "app_id": "app_demo",
+      "name": "Demo",
+      "description": "Demo app",
+      "versions": [
+        { "version": "1.0.0", "status": "published", "artifact_count": 1 }
+      ],
+      "version_count": 1,
+      "artifact_count": 1
+    }
+  ],
+  "conflicts": [],
+  "importable_apps": []
+}
+```
+
+说明：
+
+- 导入包必须包含 `data/repo.db`。
+- 后端会按包内 `repo.db` 逐条读取 app、version、artifact 信息。
+- 前端会先展示包内 app 列表，用户勾选需要导入的 app，支持全选和取消全选。
+- `conflicts` 表示当前库中已经存在同名 `app_id` 的应用；实际导入时只对已勾选 app 中的冲突项进行决议。
+
+### 3.11 执行数据库导入
+
+- **POST** `/aivuda_app_store/dev/data/import/apply`
+- `Content-Type: multipart/form-data`
+- 表单字段：
+  - `data_zip`（必填，导出的 data zip）
+  - `resolutions`（必填，JSON 字符串，形如 `{"app_demo":"skip","app_other":"overwrite"}`）
+  - `selected_app_ids`（必填，JSON 数组字符串，表示本次真正要导入的 app）
+
+成功返回示例：
+
+```json
+{
+  "ok": true,
+  "imported_apps": ["new_app"],
+  "overwritten_apps": ["app_demo"],
+  "skipped_apps": ["old_app"],
+  "failed_apps": [],
+  "messages": []
+}
+```
+
+冲突规则：
+
+- `skip`：跳过该 `app_id`，不导入其任何版本或文件。
+- `overwrite`：整应用覆盖，先删除当前同名 app 的全部版本、记录和 `data/files/apps/{app_id}`，再导入包内该 app。
+- 已勾选的非冲突 app 会直接导入；未勾选 app 不参与导入。
+- `developer_user` 和 `dev_session` 不从导入包恢复，当前登录账号体系保持不变。
+- 后端只复制包内 `repo.db` 引用到的 artifact 文件，不盲目合并整个 `data/files`。
+
 ## 4. 商店公开接口（`/store`）
 
 > 这些接口默认不要求 token，可被客户端直接访问。

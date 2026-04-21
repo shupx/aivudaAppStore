@@ -42,6 +42,12 @@ The default runtime workspace is:
 - `$HOME/aivudaAppStore_ws/.tools`
 - `$HOME/aivudaAppStore_ws/samples`
 
+The web UI account menu includes data import/export tools:
+
+- Export first lets you select which apps to include, supports select-all / clear-all, then downloads a zip archive of the selected app data under `$HOME/aivudaAppStore_ws/data` while excluding `data/tmp`.
+- Import accepts an exported data archive, reads the archive `repo.db`, lets you select which apps to import with select-all / clear-all, and then merges only the selected apps into the current `data` folder.
+- If an imported `app_id` already exists, the UI asks you to choose `skip` or `overwrite` for that app. `overwrite` replaces the whole app, including all versions and package files.
+
 ## Usage
 
 Common commands:

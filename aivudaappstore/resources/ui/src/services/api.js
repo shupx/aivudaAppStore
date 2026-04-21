@@ -38,6 +38,32 @@ export async function request(path, { method = "GET", body = null, auth = false 
   return data;
 }
 
+export async function requestBlob(path, { method = "GET", body = null, auth = false } = {}) {
+  const headers = {};
+  if (auth) {
+    if (!session.token) throw new Error(i18n.global.t("common.loginFirst"));
+    headers.Authorization = `Bearer ${session.token}`;
+  }
+
+  const res = await fetch(apiUrl(path), { method, headers, body });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${text}`);
+  }
+  return {
+    blob: await res.blob(),
+    filename: parseContentDispositionFilename(res.headers.get("Content-Disposition")),
+  };
+}
+
+function parseContentDispositionFilename(header) {
+  if (!header) return "";
+  const utf8Match = header.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match) return decodeURIComponent(utf8Match[1]);
+  const match = header.match(/filename="?([^";]+)"?/i);
+  return match ? match[1] : "";
+}
+
 export async function login(username, password) {
   const fd = new FormData();
   fd.append("username", username);
@@ -122,4 +148,28 @@ export async function deleteApp(appId) {
     `/dev/apps/${encodeURIComponent(appId)}`,
     { method: "DELETE", auth: true }
   );
+}
+
+export async function exportDataArchive() {
+  return request("/dev/data/export/apps", { auth: true });
+}
+
+export async function downloadDataArchive(selectedAppIds) {
+  const params = new URLSearchParams();
+  params.set("selected_app_ids", JSON.stringify(selectedAppIds || []));
+  return requestBlob(`/dev/data/export?${params.toString()}`, { auth: true });
+}
+
+export async function inspectDataImport(file) {
+  const fd = new FormData();
+  fd.append("data_zip", file);
+  return request("/dev/data/import/inspect", { method: "POST", body: fd, auth: true });
+}
+
+export async function applyDataImport(file, resolutions, selectedAppIds) {
+  const fd = new FormData();
+  fd.append("data_zip", file);
+  fd.append("resolutions", JSON.stringify(resolutions || {}));
+  fd.append("selected_app_ids", JSON.stringify(selectedAppIds || []));
+  return request("/dev/data/import/apply", { method: "POST", body: fd, auth: true });
 }

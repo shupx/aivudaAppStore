@@ -221,6 +221,11 @@ button.danger {
   z-index: 999;
 }
 
+.account-menu button {
+  width: 100%;
+  text-align: left;
+}
+
 .account-user {
   color: var(--muted);
   font-size: 0.9rem;
@@ -743,10 +748,76 @@ pre {
   border-radius: 8px;
 }
 
+.data-import-card {
+  width: min(720px, 94vw);
+}
+
+.import-summary,
+.conflict-list,
+.import-result {
+  display: grid;
+  gap: 10px;
+}
+
+.import-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+
+.conflict-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.check-item {
+  display: flex;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+}
+
+.check-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.conflict-item select {
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.import-error {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .conflict-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .conflict-item select {
+    width: 100%;
+  }
+}
+
 /* --- Status chips --- */
 .chip-unpublished {
   background: rgba(248, 113, 113, 0.2);
   border-color: rgba(248, 113, 113, 0.45);
   color: var(--danger);
 }
-
