@@ -48,6 +48,11 @@ export function useDataPortability({ t } = {}) {
   const selectedExportAppIds = computed(() =>
     exportApps.value.filter((app) => exportSelections[app.app_id]).map((app) => app.app_id)
   );
+  const selectedExportTotalSize = computed(() =>
+    exportApps.value
+      .filter((app) => exportSelections[app.app_id])
+      .reduce((total, app) => total + Number(app.total_artifact_size || 0), 0)
+  );
   const selectedImportAppIds = computed(() =>
     (inspectResult.value?.apps || []).filter((app) => importSelections[app.app_id]).map((app) => app.app_id)
   );
@@ -201,6 +206,7 @@ export function useDataPortability({ t } = {}) {
     exportApps,
     exportSelections,
     selectedExportAppIds,
+    selectedExportTotalSize,
     canExport,
     importDialogOpen,
     inspecting,

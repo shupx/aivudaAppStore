@@ -6,6 +6,7 @@ import { logout, session } from "../services/api";
 import shoppingBagIcon from "../assets/icons/shopping-bag.svg";
 import { setLocale } from "../i18n";
 import { useDataPortability } from "../composables/useDataPortability";
+import { formatSize } from "../utils/format";
 
 defineProps({
   title: { type: String, required: true },
@@ -24,6 +25,7 @@ const {
   exportApps,
   exportSelections,
   selectedExportAppIds,
+  selectedExportTotalSize,
   canExport,
   importDialogOpen,
   inspecting,
@@ -189,11 +191,15 @@ onBeforeUnmount(() => {
               <input v-model="exportSelections[app.app_id]" type="checkbox" />
               <div>
                 <strong>{{ app.name || app.app_id }}</strong>
-                <p class="sub">{{ app.app_id }} · {{ t("dataPortability.versionCount", { count: app.version_count }) }}</p>
+                <p class="sub">
+                  {{ app.app_id }} · {{ t("dataPortability.versionCount", { count: app.version_count }) }} ·
+                  {{ t("dataPortability.appSize", { size: formatSize(app.total_artifact_size) }) }}
+                </p>
               </div>
             </label>
           </section>
           <p class="hint">{{ t("dataPortability.selectedApps", { count: selectedExportAppIds.length }) }}</p>
+          <p class="hint">{{ t("dataPortability.selectedExportSize", { size: formatSize(selectedExportTotalSize) }) }}</p>
         </template>
 
         <div class="btnrow">

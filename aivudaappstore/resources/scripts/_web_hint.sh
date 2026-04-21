@@ -34,8 +34,8 @@ main() {
   private_host="${private_host:-127.0.0.1}"
 
   echo "Aivuda AppStore web addresses:"
-  echo "  Admin:  https://${private_host}:8543"
-  echo "  Public: https://${public_host}:8580"
+  echo -e "  Admin: \e[32mhttps://${public_host}:8543 https://${private_host}:8543\e[0m"
+  echo -e "  Public store: \e[32mhttps://${public_host}:8580 https://${private_host}:8580\e[0m"
 }
 
 main "$@"

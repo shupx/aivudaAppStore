@@ -250,9 +250,15 @@ def list_exportable_apps() -> Dict[str, Any]:
     with db_conn() as conn:
         apps = conn.execute(
             """
-            SELECT a.app_id, a.name, a.description, COUNT(v.id) AS version_count
+            SELECT
+                a.app_id,
+                a.name,
+                a.description,
+                COUNT(DISTINCT v.id) AS version_count,
+                COALESCE(SUM(t.artifact_size), 0) AS total_artifact_size
             FROM app a
             LEFT JOIN app_version v ON v.app_id = a.id
+            LEFT JOIN app_target t ON t.version_id = v.id
             GROUP BY a.id
             ORDER BY a.app_id
             """
@@ -265,6 +271,7 @@ def list_exportable_apps() -> Dict[str, Any]:
                 "name": row["name"],
                 "description": row["description"],
                 "version_count": row["version_count"],
+                "total_artifact_size": row["total_artifact_size"],
             }
             for row in apps
         ],
