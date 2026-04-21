@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { logout, session } from "../services/api";
@@ -16,7 +16,7 @@ defineProps({
 const router = useRouter();
 const { t, locale } = useI18n();
 const open = ref(false);
-const accountWrap = ref(null);
+let closeMenuTimer = null;
 const {
   exporting,
   exportDialogOpen,
@@ -97,18 +97,29 @@ function onImportFileChange(event) {
   inspectFile(file);
 }
 
-function handleClickOutside(event) {
-  if (accountWrap.value && !accountWrap.value.contains(event.target)) {
-    open.value = false;
+function openAccountMenu() {
+  if (closeMenuTimer) {
+    clearTimeout(closeMenuTimer);
+    closeMenuTimer = null;
   }
+  open.value = true;
 }
 
-onMounted(() => {
-  document.addEventListener("click", handleClickOutside);
-});
+function closeAccountMenu() {
+  if (closeMenuTimer) {
+    clearTimeout(closeMenuTimer);
+  }
+  closeMenuTimer = setTimeout(() => {
+    open.value = false;
+    closeMenuTimer = null;
+  }, 180);
+}
 
 onBeforeUnmount(() => {
-  document.removeEventListener("click", handleClickOutside);
+  if (closeMenuTimer) {
+    clearTimeout(closeMenuTimer);
+    closeMenuTimer = null;
+  }
 });
 </script>
 
@@ -146,8 +157,8 @@ onBeforeUnmount(() => {
       <img :src="shoppingBagIcon" :alt="t('common.allApps')" width="22" height="22" />
     </button>
 
-    <div ref="accountWrap" class="account-wrap">
-      <button class="icon-btn" @click="open = !open" :title="t('common.account')">👤</button>
+    <div class="account-wrap" @mouseenter="openAccountMenu" @mouseleave="closeAccountMenu">
+      <button class="icon-btn" :title="t('common.account')">👤</button>
       <div v-if="open" class="account-menu">
         <div class="account-user">{{ session.user?.username }} ({{ session.user?.role }})</div>
         <button @click="go('/me/new')">{{ t('common.uploadNewApp') }}</button>
