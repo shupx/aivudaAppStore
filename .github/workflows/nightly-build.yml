@@ -42,20 +42,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Configure Gitee credentials for submodules
-        shell: bash
-        env:
-          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
-          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-        run: |
-          test -n "${GITEE_USERNAME}"
-          test -n "${GITEE_TOKEN}"
-          git config --global url."https://${GITEE_USERNAME}:${GITEE_TOKEN}@gitee.com/".insteadOf "https://gitee.com/"
-
-      - name: Checkout submodules
-        shell: bash
-        run: git submodule update --init --recursive
-
       - name: Compute build metadata
         id: meta
         env:
