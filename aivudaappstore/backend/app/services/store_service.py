@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import quote
@@ -24,6 +25,7 @@ SAMPLE_APP_DIR = SAMPLE_DIR / "aivuda-app-pkg-example"
 SAMPLE_SOURCE_APP_DIR = SAMPLES_SOURCE_DIR / "aivuda-app-pkg-example"
 SAMPLE_PACKAGE_NAME = "aivuda-app-pkg-example.zip"
 SAMPLE_PACKAGE = SAMPLE_DIR / SAMPLE_PACKAGE_NAME
+_CADDY_LOCAL_CA_ROOT_PATH = Path.home() / ".local/share/caddy/pki/authorities/local/root.crt"
 
 
 def store_index() -> Dict[str, Any]:
@@ -67,6 +69,21 @@ def store_sample_package() -> FileResponse:
             zf.write(path, rel_path)
 
     return FileResponse(SAMPLE_PACKAGE, media_type="application/zip", filename=SAMPLE_PACKAGE_NAME)
+
+
+def store_caddy_local_ca_root() -> FileResponse:
+    cert_path = _CADDY_LOCAL_CA_ROOT_PATH
+    if not cert_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Caddy local CA root certificate not found or not accessible: ~/.local/share/caddy/pki/authorities/local/root.crt",
+        )
+
+    return FileResponse(
+        str(cert_path),
+        media_type="application/x-x509-ca-cert",
+        filename=_build_caddy_local_ca_filename(),
+    )
 
 
 def store_app_detail(app_id: str) -> Dict[str, Any]:
@@ -214,3 +231,14 @@ def _build_caddy_file_url(artifact_relpath: str) -> str:
     if not encoded:
         raise HTTPException(status_code=400, detail="Invalid package path")
     return f"{APPSTORE_API_PREFIX}/files/{encoded}"
+
+
+def _build_caddy_local_ca_filename() -> str:
+    hostname = (
+        str(os.environ.get("APPSTORE_PUBLIC_HTTPS_HOST", "") or "").strip().lower()
+        or str(os.environ.get("APPSTORE_PRIVATE_HTTPS_HOST", "") or "").strip().lower()
+    )
+    safe_hostname = "".join(ch for ch in hostname if ch.isalnum() or ch == "-").strip("-")
+    if not safe_hostname:
+        safe_hostname = "local"
+    return f"aivudaappstore-{safe_hostname}-caddy-local-root.crt"

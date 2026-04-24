@@ -8,6 +8,7 @@ from starlette.responses import Response
 
 from aivudaappstore.backend.app.services.store_service import (
     store_app_detail as service_store_app_detail,
+    store_caddy_local_ca_root as service_store_caddy_local_ca_root,
     store_download_file as service_store_download_file,
     store_download_url as service_store_download_url,
     store_index as service_store_index,
@@ -26,6 +27,11 @@ async def store_index() -> Dict[str, Any]:
 @router.get("/sample-package")
 async def store_sample_package() -> FileResponse:
     return service_store_sample_package()
+
+
+@router.api_route("/caddy-local-ca/root.crt", methods=["GET", "HEAD"])
+async def store_caddy_local_ca_root() -> FileResponse:
+    return service_store_caddy_local_ca_root()
 
 
 @router.get("/apps/{app_id}")
