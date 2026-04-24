@@ -234,11 +234,18 @@ def _build_caddy_file_url(artifact_relpath: str) -> str:
 
 
 def _build_caddy_local_ca_filename() -> str:
-    hostname = (
-        str(os.environ.get("APPSTORE_PUBLIC_HTTPS_HOST", "") or "").strip().lower()
-        or str(os.environ.get("APPSTORE_PRIVATE_HTTPS_HOST", "") or "").strip().lower()
-    )
-    safe_hostname = "".join(ch for ch in hostname if ch.isalnum() or ch == "-").strip("-")
-    if not safe_hostname:
-        safe_hostname = "local"
-    return f"aivudaappstore-{safe_hostname}-caddy-local-root.crt"
+    parts = []
+
+    for env_name in ("APPSTORE_PUBLIC_HTTPS_HOST", "APPSTORE_PRIVATE_HTTPS_HOST"):
+        raw_value = str(os.environ.get(env_name, "") or "").strip().lower()
+        if not raw_value:
+            continue
+        normalized = raw_value.replace(".", "_")
+        safe_value = "".join(ch for ch in normalized if ch.isalnum() or ch in {"-", "_"}).strip("-_")
+        if safe_value:
+            parts.append(safe_value)
+
+    if not parts:
+        parts.append("local")
+
+    return f"aivudaappstore-{'-'.join(parts)}-caddy-local-root.crt"
