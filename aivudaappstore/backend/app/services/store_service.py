@@ -46,6 +46,8 @@ def store_index() -> Dict[str, Any]:
                     "app_id": app_row["app_id"],
                     "version": version_row["version"],
                     "manifest": manifest,
+                    "created_at": version_row["created_at"],
+                    "published_at": version_row["published_at"],
                     "updated_at": version_row["updated_at"],
                 }
             )

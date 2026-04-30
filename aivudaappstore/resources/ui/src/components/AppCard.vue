@@ -1,11 +1,15 @@
 <script setup>
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { Download, Trash2, Loader2 } from "lucide-vue-next";
+import { formatDate } from "../utils/format";
 
-defineProps({
+const props = defineProps({
   title: { type: String, required: true },
   subtitle: { type: String, default: "" },
   description: { type: String, default: "" },
+  createdAt: { type: Number, default: 0 },
+  updatedAt: { type: Number, default: 0 },
   downloading: { type: Boolean, default: false },
   showDelete: { type: Boolean, default: false },
   deleting: { type: Boolean, default: false },
@@ -14,6 +18,8 @@ defineProps({
 defineEmits(["click", "download", "delete"]);
 
 const { t } = useI18n();
+const createdAtText = computed(() => formatDate(props.createdAt));
+const updatedAtText = computed(() => formatDate(props.updatedAt));
 </script>
 
 <template>
@@ -32,6 +38,11 @@ const { t } = useI18n();
     <p class="text-zinc-700 dark:text-zinc-300 text-sm m-0 overflow-hidden line-clamp-2" :title="description || t('card.noDescription')">
       {{ description || t("card.noDescription") }}
     </p>
+
+    <div class="mt-4 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
+      <span>{{ t("card.createdAt") }} {{ createdAtText }}</span>
+      <span>{{ t("card.updatedAt") }} {{ updatedAtText }}</span>
+    </div>
 
     <div class="absolute right-4 bottom-4 flex items-center gap-2">
       <div v-if="showDelete" class="relative group/delete">
