@@ -6,6 +6,7 @@ import AppCard from "../components/AppCard.vue";
 import AppTopBar from "../components/AppTopBar.vue";
 import { fetchMe, fetchStoreApps, logout, deleteApp, session } from "../services/api";
 import { useAppDownload } from "../composables/useAppDownload";
+import { Loader2, Inbox } from "lucide-vue-next";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -72,15 +73,27 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="bg"></div>
-  <section class="page-wrap">
+  <div class="bg-grid"></div>
+  <section class="w-[min(1240px,96vw)] mx-auto my-6 flex flex-col gap-6">
     <AppTopBar :title="t('store.title')" :subtitle="t('store.subtitle')" :show-back="false" />
 
-    <section class="card list-wrap">
-      <h2>{{ t("store.appList") }}</h2>
-      <div v-if="loading" class="hint">{{ t("store.loading") }}</div>
-      <div v-else-if="apps.length === 0" class="hint">{{ t("store.empty") }}</div>
-      <div v-else class="card-grid">
+    <section class="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-700/60 shadow-xl shadow-zinc-200 dark:shadow-2xl dark:shadow-black/50 rounded-3xl p-6 md:p-8">
+      <h2 class="text-xl font-bold text-zinc-900 dark:text-zinc-100 m-0 mb-6 flex items-center gap-2">
+        {{ t("store.appList") }}
+        <span class="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs py-1 px-2.5 rounded-full font-medium" v-if="!loading">{{ apps.length }}</span>
+      </h2>
+      
+      <div v-if="loading" class="flex flex-col items-center justify-center py-20 text-zinc-500 dark:text-zinc-400 gap-3">
+        <Loader2 class="w-8 h-8 animate-spin text-emerald-500" />
+        <span>{{ t("store.loading") }}</span>
+      </div>
+      
+      <div v-else-if="apps.length === 0" class="flex flex-col items-center justify-center py-20 text-zinc-400 dark:text-zinc-500 gap-3">
+        <Inbox class="w-12 h-12 opacity-50" />
+        <span>{{ t("store.empty") }}</span>
+      </div>
+      
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         <AppCard
           v-for="item in apps"
           :key="item.app_id"
