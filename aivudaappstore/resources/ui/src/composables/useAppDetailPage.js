@@ -36,6 +36,7 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
   });
   const uploadFile = ref(null);
   const uploadSubmitting = ref(false);
+  const uploadManifestNameMismatch = ref("");
 
   const showEditDialog = ref(false);
   const editForm = ref({
@@ -45,6 +46,7 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
   });
   const editFile = ref(null);
   const editSubmitting = ref(false);
+  const editManifestNameMismatch = ref("");
   const editParsedReady = ref(false);
   const editPackageEntries = ref([]);
   const editPackageTreeLines = ref([]);
@@ -81,6 +83,7 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
       manifest: createManifestForm({ appId, name: fixedName }),
     };
     uploadFile.value = null;
+    uploadManifestNameMismatch.value = "";
     resetUploadParseState();
     showUploadDialog.value = true;
   }
@@ -91,6 +94,19 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
     editPackageTreeLines.value = [];
     editManifestFoundPath.value = "";
     editParsedManifestBase.value = {};
+    editManifestNameMismatch.value = "";
+  }
+
+  function buildManifestNameMismatchMessage(parsedManifest) {
+    const expectedName = (appInfo.value?.name || "").trim();
+    const packageName = String(parsedManifest?.name || "").trim();
+    if (!expectedName || !packageName || packageName === expectedName) {
+      return "";
+    }
+    return t("detail.manifestNameMismatch", {
+      packageName,
+      expectedName,
+    });
   }
 
   async function parseEditPackage(file) {
@@ -224,6 +240,7 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
       if (data?.normalized_manifest) {
         applyNormalizedManifest(uploadForm.value.manifest, data.normalized_manifest);
       }
+      uploadManifestNameMismatch.value = buildManifestNameMismatchMessage(data?.manifest);
       uploadForm.value.manifest.appId = appId;
       uploadForm.value.manifest.name = appInfo.value?.name || uploadForm.value.manifest.name;
       return;
@@ -239,6 +256,7 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
       if (data?.normalized_manifest) {
         applyNormalizedManifest(editForm.value.manifest, data.normalized_manifest);
       }
+      editManifestNameMismatch.value = buildManifestNameMismatchMessage(data?.manifest);
       editForm.value.manifest.appId = appId;
       editForm.value.manifest.name = appInfo.value?.name || editForm.value.manifest.name;
       editForm.value.manifest.version = editForm.value.version;
@@ -267,9 +285,11 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
     showUploadDialog,
     uploadForm,
     uploadSubmitting,
+    uploadManifestNameMismatch,
     showEditDialog,
     editForm,
     editSubmitting,
+    editManifestNameMismatch,
     editHasPackageSelected,
     editParsedReady,
     editPackageEntries,

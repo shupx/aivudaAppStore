@@ -107,6 +107,7 @@ Authorization: Bearer <access_token>
 - `manifest.version` 必填。
 - 若传了 `version`，必须与 `manifest.version` 一致。
 - `manifest.name` 必须与已有 app 名称一致。
+- 前端在上传新版本/替换包前会预检包内 `manifest.name`，若与当前 app 名称不同会提示；提交时仍会按当前 app 名称重写后再上传。
 
 ### 3.4 修改版本（描述与/或包）
 

@@ -24,9 +24,11 @@ const {
   showUploadDialog,
   uploadForm,
   uploadSubmitting,
+  uploadManifestNameMismatch,
   showEditDialog,
   editForm,
   editSubmitting,
+  editManifestNameMismatch,
   editHasPackageSelected,
   editParsedReady,
   editPackageEntries,
@@ -201,6 +203,9 @@ const {
             <div>
               <h3 class="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">{{ t("upload.stepManifest") }}</h3>
               <p class="text-zinc-500 dark:text-zinc-400 text-sm flex items-center gap-2"><Code class="w-4 h-4" /> {{ t("upload.manifestPath", { path: uploadManifestFoundPath || 'manifest.yaml' }) }}</p>
+              <p v-if="uploadManifestNameMismatch" class="mt-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-2">
+                {{ uploadManifestNameMismatch }}
+              </p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -271,6 +276,9 @@ const {
             <div>
               <h3 class="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">{{ t("upload.stepManifest") }}</h3>
               <p class="text-zinc-500 dark:text-zinc-400 text-sm flex items-center gap-2"><Code class="w-4 h-4" /> {{ t("upload.manifestPath", { path: editManifestFoundPath || 'manifest.yaml' }) }}</p>
+              <p v-if="editManifestNameMismatch" class="mt-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl px-3 py-2">
+                {{ editManifestNameMismatch }}
+              </p>
               <p class="text-zinc-500 text-xs">{{ t("detail.editRequiredFieldsOnly") }}</p>
             </div>
 

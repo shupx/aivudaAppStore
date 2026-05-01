@@ -187,6 +187,7 @@
     "editRequiredFieldsOnly": "替换安装包时，app 名称、app_id、version 均固定不可修改，仅允许修改 description。",
     "appNameLockedHint": "上传新版本时 app 名称必须与当前应用一致，不能修改。",
     "appIdLockedHint": "上传新版本时 app_id 必须与当前应用一致，不能修改。",
-    "versionLockedHint": "编辑该版本时 version 必须保持不变。"
+    "versionLockedHint": "编辑该版本时 version 必须保持不变。",
+    "manifestNameMismatch": "包内 manifest.name 为「{packageName}」，当前应用名称为「{expectedName}」，已在提交时自动按当前应用重写。请检查确认是否符合预期！！！"
   }
 }

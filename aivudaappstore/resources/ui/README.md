@@ -17,6 +17,7 @@
 - 新应用上传：先上传 zip 并解析，必须存在 `manifest.yaml`
 - 解析成功后展示包内文件树（最多 3 层）
 - 新应用提交时仅编辑并校验 4 个必填字段：`app_id`、`name`、`description`、`version`
+- 应用详情里的上传新版本/替换包会预检包内 `manifest.name`，若与当前应用名称不同会直接提示，但提交时仍会按当前应用名称重写
 - 提交时以后端重写的 `manifest.yaml` 覆盖包内原 manifest
 
 数据库导入导出流程：
