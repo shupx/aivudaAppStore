@@ -78,21 +78,25 @@ Default ports:
 
 ## Build From Source
 
+Build developing source:
+
 ```bash
 git clone https://gitee.com/buaa_iooda/aivudaAppStore.git --recurse-submodules
 cd aivudaAppStore
 git submodule update --init --recursive
-pip install -e .
-# pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -e .  # use pypi mirror for build
+pip install --user -U pip setuptools wheel
+pip install --user -e .
+# pip install --user -i https://pypi.tuna.tsinghua.edu.cn/simple -e .  # use pypi mirror for build
 ```
 
 Build wheel and sdist locally:
 
 ```bash
 cd aivudaappstore/resources/ui
-npm install
+npm install # require npm 20+
 npm run build
 cd ../../..
+pip install --user -U pip setuptools wheel
 AIVUDAAPPSTORE_BUILD_SEQ=01 python -m build
 # AIVUDAAPPSTORE_BUILD_SEQ=01 PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple python -m build  # use pypi mirror
 ```
