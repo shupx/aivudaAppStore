@@ -4,9 +4,10 @@ import json
 import re
 import shutil
 import sqlite3
+import tarfile
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 from fastapi import HTTPException, UploadFile
 import yaml
@@ -35,6 +36,29 @@ def _normalize_zip_name(name: str) -> str:
     while name.startswith("./"):
         name = name[2:]
     return name
+
+
+ArchiveKind = Literal["zip", "tar.gz", "tgz", "tar"]
+
+
+def _detect_archive_kind(filename: str) -> ArchiveKind:
+    lowered = str(filename or "").strip().lower()
+    if lowered.endswith(".tar.gz"):
+        return "tar.gz"
+    if lowered.endswith(".tgz"):
+        return "tgz"
+    if lowered.endswith(".tar"):
+        return "tar"
+    if lowered.endswith(".zip"):
+        return "zip"
+    raise HTTPException(
+        status_code=400,
+        detail="Unsupported package archive format. Supported formats: zip, tar.gz, tgz, tar",
+    )
+
+
+def _archive_suffix(kind: ArchiveKind) -> str:
+    return kind
 
 
 def _known_manifest_fields() -> Set[str]:
@@ -104,6 +128,10 @@ def _detect_package_prefix(names: Set[str], manifest_member: Optional[str]) -> s
     if len(prefixes) == 1:
         return f"{next(iter(prefixes))}/"
     return ""
+
+
+def _normalize_archive_members(names: List[str]) -> Set[str]:
+    return {_normalize_zip_name(name) for name in names if _normalize_zip_name(name)}
 
 
 def _parse_manifest_yaml(text: str) -> Dict[str, Any]:
@@ -323,27 +351,125 @@ def _validate_manifest_for_package(
         raise HTTPException(status_code=400, detail="manifest.description is required")
 
 
-def _safe_extract_zip(zip_path: Path, dest_dir: Path, prefix: str = "") -> None:
+def _iter_archive_names(archive_path: Path, kind: ArchiveKind) -> Set[str]:
+    if kind == "zip":
+        try:
+            with zipfile.ZipFile(archive_path) as zf:
+                return _normalize_archive_members(zf.namelist())
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail="Package archive is not a valid zip file") from exc
+
+    try:
+        with tarfile.open(archive_path, "r:*") as tf:
+            return _normalize_archive_members(tf.getnames())
+    except tarfile.TarError as exc:
+        raise HTTPException(status_code=400, detail="Package archive is not a valid tar archive") from exc
+
+
+def _safe_extract_archive(
+    archive_path: Path,
+    dest_dir: Path,
+    *,
+    kind: ArchiveKind,
+    prefix: str = "",
+) -> None:
     dest_real = dest_dir.resolve()
-    with zipfile.ZipFile(zip_path) as zf:
-        for member in zf.infolist():
-            if member.is_dir():
-                continue
-            norm_name = _normalize_zip_name(member.filename)
-            if prefix:
-                if not norm_name.startswith(prefix):
+    if kind == "zip":
+        try:
+            with zipfile.ZipFile(archive_path) as zf:
+                for member in zf.infolist():
+                    if member.is_dir():
+                        continue
+                    norm_name = _normalize_zip_name(member.filename)
+                    if prefix:
+                        if not norm_name.startswith(prefix):
+                            continue
+                        norm_name = norm_name[len(prefix) :]
+                    if not norm_name:
+                        continue
+                    if norm_name in {"app.yaml", "manifest.yaml", "manifest.yml"}:
+                        continue
+                    member_path = (dest_dir / norm_name).resolve()
+                    if not str(member_path).startswith(str(dest_real)):
+                        raise HTTPException(status_code=400, detail="Invalid path in package archive")
+                    member_path.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(member) as src, member_path.open("wb") as dst:
+                        dst.write(src.read())
+            return
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail="Package archive is not a valid zip file") from exc
+
+    try:
+        with tarfile.open(archive_path, "r:*") as tf:
+            for member in tf.getmembers():
+                if member.isdir():
                     continue
-                norm_name = norm_name[len(prefix) :]
-            if not norm_name:
+                if not member.isreg():
+                    continue
+                norm_name = _normalize_zip_name(member.name)
+                if prefix:
+                    if not norm_name.startswith(prefix):
+                        continue
+                    norm_name = norm_name[len(prefix) :]
+                if not norm_name:
+                    continue
+                if norm_name in {"app.yaml", "manifest.yaml", "manifest.yml"}:
+                    continue
+                member_path = (dest_dir / norm_name).resolve()
+                if not str(member_path).startswith(str(dest_real)):
+                    raise HTTPException(status_code=400, detail="Invalid path in package archive")
+                extracted = tf.extractfile(member)
+                if extracted is None:
+                    continue
+                member_path.parent.mkdir(parents=True, exist_ok=True)
+                with extracted as src, member_path.open("wb") as dst:
+                    shutil.copyfileobj(src, dst)
+    except tarfile.TarError as exc:
+        raise HTTPException(status_code=400, detail="Package archive is not a valid tar archive") from exc
+
+
+def _read_manifest_from_archive(
+    archive_path: Path,
+    *,
+    kind: ArchiveKind,
+    manifest_member: str,
+) -> Dict[str, Any]:
+    if kind == "zip":
+        try:
+            with zipfile.ZipFile(archive_path) as zf:
+                with zf.open(manifest_member) as fp:
+                    return _parse_manifest_yaml(fp.read().decode("utf-8"))
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail="Package archive is not a valid zip file") from exc
+
+    try:
+        with tarfile.open(archive_path, "r:*") as tf:
+            fp = tf.extractfile(manifest_member)
+            if fp is None:
+                raise HTTPException(status_code=400, detail="manifest.yaml was not found in package archive")
+            with fp:
+                return _parse_manifest_yaml(fp.read().decode("utf-8"))
+    except tarfile.TarError as exc:
+        raise HTTPException(status_code=400, detail="Package archive is not a valid tar archive") from exc
+
+
+def _write_archive_from_dir(src_dir: Path, archive_path: Path, *, kind: ArchiveKind) -> None:
+    if kind == "zip":
+        with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for path in src_dir.rglob("*"):
+                if path.is_dir():
+                    continue
+                zf.write(path, path.relative_to(src_dir))
+        return
+
+    mode = "w"
+    if kind in {"tar.gz", "tgz"}:
+        mode = "w:gz"
+    with tarfile.open(archive_path, mode) as tf:
+        for path in sorted(src_dir.rglob("*")):
+            if path.is_dir():
                 continue
-            if norm_name in {"app.yaml", "manifest.yaml", "manifest.yml"}:
-                continue
-            member_path = (dest_dir / norm_name).resolve()
-            if not str(member_path).startswith(str(dest_real)):
-                raise HTTPException(status_code=400, detail="Invalid path in package.zip")
-            member_path.parent.mkdir(parents=True, exist_ok=True)
-            with zf.open(member) as src, member_path.open("wb") as dst:
-                dst.write(src.read())
+            tf.add(path, arcname=path.relative_to(src_dir).as_posix(), recursive=False)
 
 
 async def _process_and_store_package(
@@ -354,7 +480,7 @@ async def _process_and_store_package(
     expected_app_id: Optional[str] = None,
     expected_version: Optional[str] = None,
 ) -> Tuple[Path, str, int]:
-    """Validate uploaded zip, extract, generate manifest.yaml, build final package.zip.
+    """Validate uploaded archive, extract, generate manifest.yaml, rebuild in original format.
 
     Returns (package_path, artifact_sha256, artifact_size).
     Caller must handle cleanup of package_root on failure.
@@ -364,21 +490,18 @@ async def _process_and_store_package(
         app_dir = work_dir / "app"
         app_dir.mkdir(parents=True, exist_ok=True)
 
-        tmp_zip = work_dir / "package.zip"
-        tmp_zip.write_bytes(await package_zip.read())
-        try:
-            with zipfile.ZipFile(tmp_zip) as zf:
-                names = {_normalize_zip_name(n) for n in zf.namelist() if _normalize_zip_name(n)}
-        except zipfile.BadZipFile as exc:
-            raise HTTPException(status_code=400, detail="package.zip is not a valid zip file") from exc
+        archive_kind = _detect_archive_kind(package_zip.filename or "")
+        tmp_archive = work_dir / f"package-upload.{_archive_suffix(archive_kind)}"
+        tmp_archive.write_bytes(await package_zip.read())
+        names = _iter_archive_names(tmp_archive, archive_kind)
 
         if not names:
-            raise HTTPException(status_code=400, detail="package.zip is empty")
+            raise HTTPException(status_code=400, detail="Package archive is empty")
 
         manifest_member = _find_manifest_member(names)
         prefix = _detect_package_prefix(names, manifest_member)
 
-        _safe_extract_zip(tmp_zip, app_dir, prefix=prefix)
+        _safe_extract_archive(tmp_archive, app_dir, kind=archive_kind, prefix=prefix)
 
         manifest = _normalize_manifest_payload(manifest_payload)
         _validate_manifest_for_package(
@@ -396,12 +519,8 @@ async def _process_and_store_package(
             legacy_manifest.unlink()
 
         package_root.mkdir(parents=True, exist_ok=True)
-        package_path = package_root / "package.zip"
-        with zipfile.ZipFile(package_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for path in app_dir.rglob("*"):
-                if path.is_dir():
-                    continue
-                zf.write(path, path.relative_to(app_dir))
+        package_path = package_root / f"package.{_archive_suffix(archive_kind)}"
+        _write_archive_from_dir(app_dir, package_path, kind=archive_kind)
 
         artifact_sha = file_sha256(package_path)
         artifact_size = package_path.stat().st_size
@@ -427,23 +546,23 @@ def _parse_manifest_json(manifest_json: str) -> Dict[str, Any]:
 async def parse_package_manifest(*, package_zip: UploadFile) -> Dict[str, Any]:
     tmp_dir = TMP_DIR / "_manifest_parse"
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    tmp_zip = tmp_dir / f"{now_ts()}_{_app_name_tag(package_zip.filename or 'package')}.zip"
+    archive_kind = _detect_archive_kind(package_zip.filename or "")
+    tmp_archive = tmp_dir / f"{now_ts()}_{_app_name_tag(package_zip.filename or 'package')}.{_archive_suffix(archive_kind)}"
     try:
-        tmp_zip.write_bytes(await package_zip.read())
-        try:
-            with zipfile.ZipFile(tmp_zip) as zf:
-                names = {_normalize_zip_name(n) for n in zf.namelist() if _normalize_zip_name(n)}
-                if not names:
-                    raise HTTPException(status_code=400, detail="package.zip is empty")
-                manifest_member = _find_manifest_member(names)
-                prefix = _detect_package_prefix(names, manifest_member)
-                package_entries = _build_package_entries(names, prefix=prefix, max_depth=3)
-                if not manifest_member:
-                    raise HTTPException(status_code=400, detail="manifest.yaml was not found in package.zip")
-                with zf.open(manifest_member) as fp:
-                    raw_manifest = _parse_manifest_yaml(fp.read().decode("utf-8"))
-        except zipfile.BadZipFile as exc:
-            raise HTTPException(status_code=400, detail="package.zip is not a valid zip file") from exc
+        tmp_archive.write_bytes(await package_zip.read())
+        names = _iter_archive_names(tmp_archive, archive_kind)
+        if not names:
+            raise HTTPException(status_code=400, detail="Package archive is empty")
+        manifest_member = _find_manifest_member(names)
+        prefix = _detect_package_prefix(names, manifest_member)
+        package_entries = _build_package_entries(names, prefix=prefix, max_depth=3)
+        if not manifest_member:
+            raise HTTPException(status_code=400, detail="manifest.yaml was not found in package archive")
+        raw_manifest = _read_manifest_from_archive(
+            tmp_archive,
+            kind=archive_kind,
+            manifest_member=manifest_member,
+        )
 
         return {
             "ok": True,
@@ -455,8 +574,8 @@ async def parse_package_manifest(*, package_zip: UploadFile) -> Dict[str, Any]:
             "warnings": [],
         }
     finally:
-        if tmp_zip.exists():
-            tmp_zip.unlink()
+        if tmp_archive.exists():
+            tmp_archive.unlink()
         if tmp_dir.exists():
             try:
                 tmp_dir.rmdir()
@@ -732,10 +851,11 @@ async def modify_version(
         if package_zip is not None and package_zip.filename:
             package_root = FILES_DIR / "apps" / app_id_text / version
 
-            # Remove old package file (keep directory)
-            old_pkg = package_root / "package.zip"
-            if old_pkg.exists():
-                old_pkg.unlink()
+            # Remove old package file(s) but keep directory contents used by workflow.
+            for pattern in ("package.zip", "package.tar.gz", "package.tgz", "package.tar"):
+                old_pkg = package_root / pattern
+                if old_pkg.exists():
+                    old_pkg.unlink()
 
             package_path, artifact_sha, artifact_size = await _process_and_store_package(
                 package_zip=package_zip,

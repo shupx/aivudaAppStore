@@ -5,10 +5,10 @@
 
 (file_server) {
   @files path /aivuda_app_store/files/*
-  @file_pkg path_regexp file_pkg ^/aivuda_app_store/files/apps/([^/]+)/([^/]+)/[^/]+$
+  @file_pkg path_regexp file_pkg ^/aivuda_app_store/files/apps/([^/]+)/([^/]+)/package(\.(?:tar\.gz|tgz|tar|zip))$
 
   handle @files {
-    header @file_pkg Content-Disposition "attachment; filename=\"{re.file_pkg.1}-{re.file_pkg.2}.zip\""
+    header @file_pkg Content-Disposition "attachment; filename=\"{re.file_pkg.1}-{re.file_pkg.2}{re.file_pkg.3}\""
     uri strip_prefix /aivuda_app_store/files
     root * {$AIVUDAAPPSTORE_FILES_ROOT}
 

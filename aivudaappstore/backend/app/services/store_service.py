@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import mimetypes
 import os
 from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import quote
-import zipfile
+import tarfile
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
@@ -23,9 +24,16 @@ from aivudaappstore.backend.app.services.utils import now_ts
 SAMPLE_DIR = SAMPLES_DIR
 SAMPLE_APP_DIR = SAMPLE_DIR / "aivuda-app-pkg-example"
 SAMPLE_SOURCE_APP_DIR = SAMPLES_SOURCE_DIR / "aivuda-app-pkg-example"
-SAMPLE_PACKAGE_NAME = "aivuda-app-pkg-example.zip"
+SAMPLE_PACKAGE_NAME = "aivuda-app-pkg-example.tar.gz"
 SAMPLE_PACKAGE = SAMPLE_DIR / SAMPLE_PACKAGE_NAME
 _CADDY_LOCAL_CA_ROOT_PATH = Path.home() / ".local/share/caddy/pki/authorities/local/root.crt"
+
+
+def _artifact_download_filename(app_id: str, version: str, artifact_relpath: str) -> str:
+    rel_name = Path(str(artifact_relpath or "")).name
+    suffixes = Path(rel_name).suffixes
+    suffix = "".join(suffixes) if suffixes else ".zip"
+    return f"{app_id}-{version}{suffix}"
 
 
 def store_index() -> Dict[str, Any]:
@@ -60,17 +68,17 @@ def store_sample_package() -> FileResponse:
         raise HTTPException(status_code=404, detail="Sample package directory not found")
 
     ensure_storage_dirs()
-    with zipfile.ZipFile(SAMPLE_PACKAGE, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for path in SAMPLE_SOURCE_APP_DIR.rglob("*"):
+    with tarfile.open(SAMPLE_PACKAGE, "w:gz") as tf:
+        for path in sorted(SAMPLE_SOURCE_APP_DIR.rglob("*")):
             if path.is_dir():
                 continue
             rel_path = path.relative_to(SAMPLE_SOURCE_APP_DIR)
             rel_text = rel_path.as_posix()
             if rel_text == ".git" or rel_text.startswith(".git/"):
                 continue
-            zf.write(path, rel_path)
+            tf.add(path, arcname=rel_text, recursive=False)
 
-    return FileResponse(SAMPLE_PACKAGE, media_type="application/zip", filename=SAMPLE_PACKAGE_NAME)
+    return FileResponse(SAMPLE_PACKAGE, media_type="application/gzip", filename=SAMPLE_PACKAGE_NAME)
 
 
 def store_caddy_local_ca_root() -> FileResponse:
@@ -179,6 +187,7 @@ def store_download_url(app_id: str, version: str) -> Dict[str, Any]:
         "url": static_url,
         "sha256": target["artifact_sha256"] or "",
         "size": target["artifact_size"] or 0,
+        "filename": _artifact_download_filename(app_id, version, str(target["artifact_relpath"] or "")),
     }
 
 
@@ -233,6 +242,17 @@ def _build_caddy_file_url(artifact_relpath: str) -> str:
     if not encoded:
         raise HTTPException(status_code=400, detail="Invalid package path")
     return f"{APPSTORE_API_PREFIX}/files/{encoded}"
+
+
+def store_download_response_meta(app_id: str, version: str) -> Dict[str, str]:
+    target = _get_download_target(app_id, version)
+    artifact_relpath = str(target["artifact_relpath"] or "")
+    filename = _artifact_download_filename(app_id, version, artifact_relpath)
+    media_type, _ = mimetypes.guess_type(filename)
+    return {
+        "filename": filename,
+        "media_type": media_type or "application/octet-stream",
+    }
 
 
 def _build_caddy_local_ca_filename() -> str:

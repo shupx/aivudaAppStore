@@ -66,7 +66,7 @@ Authorization: Bearer <access_token>
 - **POST** `/aivuda_app_store/dev/apps/upload-package`
 - 表单字段：
   - `manifest_json`（必填，JSON 字符串）
-  - `package_zip`（必填，zip 文件）
+  - `package_zip`（必填，安装包归档文件；历史字段名，支持 `zip` / `tar.gz` / `tgz` / `tar`）
   - `name` / `version` / `description`（可传空，最终以 manifest 为准）
 
 成功返回：
@@ -84,7 +84,7 @@ Authorization: Bearer <access_token>
 ### 3.2 解析上传包中的 manifest（前端预检）
 
 - **POST** `/aivuda_app_store/dev/apps/manifest/parse-package`
-- 表单字段：`package_zip`（必填）
+- 表单字段：`package_zip`（必填，支持 `zip` / `tar.gz` / `tgz` / `tar`）
 
 成功返回字段包括：
 
@@ -99,7 +99,7 @@ Authorization: Bearer <access_token>
 - **POST** `/aivuda_app_store/dev/apps/{app_id}/versions`
 - 表单字段：
   - `manifest_json`（必填）
-  - `package_zip`（必填）
+  - `package_zip`（必填，支持 `zip` / `tar.gz` / `tgz` / `tar`）
   - `version` / `description`（可选）
 
 说明：
@@ -115,7 +115,7 @@ Authorization: Bearer <access_token>
 - 表单字段：
   - `description`（可选）
   - `manifest_json`（替换包时必需）
-  - `package_zip`（可选，传了表示替换安装包）
+  - `package_zip`（可选，传了表示替换安装包；支持 `zip` / `tar.gz` / `tgz` / `tar`）
 
 ### 3.5 下架版本
 
@@ -289,9 +289,10 @@ Authorization: Bearer <access_token>
 
 ```json
 {
-  "url": "/aivuda_app_store/files/apps/app_demo/1.1.0/package.zip",
+  "url": "/aivuda_app_store/files/apps/app_demo/1.1.0/package.tar.gz",
   "sha256": "...",
-  "size": 12345
+  "size": 12345,
+  "filename": "app_demo-1.1.0.tar.gz"
 }
 ```
 
@@ -304,11 +305,11 @@ Authorization: Bearer <access_token>
 ### 4.6 下载示例包
 
 - **GET** `/aivuda_app_store/store/sample-package`
-- 返回文件名：`aivuda-app-pkg-example.zip`
+- 返回文件名默认是 `aivuda-app-pkg-example.tar.gz` 示例包；系统安装包实际支持 `zip` / `tar.gz` / `tgz` / `tar`
 
 ## 5. 常见错误码
 
-- `400`：参数或包格式错误（如 manifest 缺字段、zip 非法）
+- `400`：参数或包格式错误（如 manifest 缺字段、压缩包非法）
 - `401`：token 缺失/无效/过期（仅 dev 接口）
 - `404`：app 或 version 不存在，或资源文件不存在
 - `409`：资源冲突（如 app_id 已存在、version 已存在）
@@ -333,4 +334,4 @@ Authorization: Bearer <access_token>
 ### 6.2 客户端下载
 
 1. 先调 `/store/apps/{app_id}/versions/{version}/download-url`
-2. 再访问返回的 `url` 下载 zip
+2. 再访问返回的 `url` 下载实际格式的安装包

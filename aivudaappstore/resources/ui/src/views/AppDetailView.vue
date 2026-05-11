@@ -192,7 +192,7 @@ const {
           <h3 class="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{{ t("upload.stepPackage") }}</h3>
           <div class="flex items-center justify-between p-3 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl bg-zinc-50 dark:bg-zinc-950/50">
             <span class="text-sm text-zinc-500 dark:text-zinc-400">{{ t("detail.packageLabel") }}</span>
-            <input type="file" accept=".zip" @change="onFileChange('upload', $event)" class="text-sm text-zinc-700 dark:text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-zinc-100 dark:file:bg-zinc-800 file:text-emerald-600 dark:file:text-emerald-400 hover:file:bg-zinc-200 dark:hover:file:bg-zinc-700 cursor-pointer" />
+            <input type="file" accept=".zip,.tar,.tar.gz,.tgz,.gz" @change="onFileChange('upload', $event)" class="text-sm text-zinc-700 dark:text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-zinc-100 dark:file:bg-zinc-800 file:text-emerald-600 dark:file:text-emerald-400 hover:file:bg-zinc-200 dark:hover:file:bg-zinc-700 cursor-pointer" />
           </div>
           <div v-if="parsingManifest" class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-sm mt-1 font-medium"><Loader2 class="w-4 h-4 animate-spin" /> {{ t("upload.parsing") }}</div>
           <p class="text-xs text-zinc-500">{{ t("upload.hintManifest") }}</p>
@@ -265,7 +265,7 @@ const {
           <h3 class="text-sm font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">{{ t("upload.stepPackage") }}</h3>
           <div class="flex items-center justify-between p-3 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl bg-zinc-50 dark:bg-zinc-950/50 hover:border-emerald-500/50 transition-colors">
             <span class="text-sm text-zinc-500 dark:text-zinc-400">{{ t("detail.replacePackage") }}</span>
-            <input type="file" accept=".zip" @change="onFileChange('edit', $event)" class="text-sm text-zinc-700 dark:text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-zinc-100 dark:file:bg-zinc-800 file:text-emerald-600 dark:file:text-emerald-400 hover:file:bg-zinc-200 dark:hover:file:bg-zinc-700 cursor-pointer" />
+            <input type="file" accept=".zip,.tar,.tar.gz,.tgz,.gz" @change="onFileChange('edit', $event)" class="text-sm text-zinc-700 dark:text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-zinc-100 dark:file:bg-zinc-800 file:text-emerald-600 dark:file:text-emerald-400 hover:file:bg-zinc-200 dark:hover:file:bg-zinc-700 cursor-pointer" />
           </div>
           <div v-if="parsingManifest" class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 text-sm mt-1 font-medium"><Loader2 class="w-4 h-4 animate-spin" /> {{ t("upload.parsing") }}</div>
           <p class="text-xs text-zinc-500">{{ t("upload.hintManifest") }}</p>

@@ -6,3 +6,5 @@ dist/
 .publish-venv/
 .publish-tools/
 .tools/
+*.tar.gz
+*.zip
