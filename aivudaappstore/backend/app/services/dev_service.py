@@ -437,18 +437,26 @@ def _read_manifest_from_archive(
     if kind == "zip":
         try:
             with zipfile.ZipFile(archive_path) as zf:
-                with zf.open(manifest_member) as fp:
-                    return _parse_manifest_yaml(fp.read().decode("utf-8"))
+                for member in zf.namelist():
+                    if _normalize_zip_name(member) != manifest_member:
+                        continue
+                    with zf.open(member) as fp:
+                        return _parse_manifest_yaml(fp.read().decode("utf-8"))
+                raise HTTPException(status_code=400, detail="manifest.yaml was not found in package archive")
         except zipfile.BadZipFile as exc:
             raise HTTPException(status_code=400, detail="Package archive is not a valid zip file") from exc
 
     try:
         with tarfile.open(archive_path, "r:*") as tf:
-            fp = tf.extractfile(manifest_member)
-            if fp is None:
-                raise HTTPException(status_code=400, detail="manifest.yaml was not found in package archive")
-            with fp:
-                return _parse_manifest_yaml(fp.read().decode("utf-8"))
+            for member in tf.getmembers():
+                if _normalize_zip_name(member.name) != manifest_member:
+                    continue
+                fp = tf.extractfile(member)
+                if fp is None:
+                    break
+                with fp:
+                    return _parse_manifest_yaml(fp.read().decode("utf-8"))
+            raise HTTPException(status_code=400, detail="manifest.yaml was not found in package archive")
     except tarfile.TarError as exc:
         raise HTTPException(status_code=400, detail="Package archive is not a valid tar archive") from exc
 

@@ -87,6 +87,25 @@ class ArchiveSupportTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ctx.exception.status_code, 400)
         self.assertIn("Unsupported package archive format", str(ctx.exception.detail))
 
+    async def test_parse_package_manifest_accepts_dot_slash_tar_members(self) -> None:
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+            manifest_payload = _manifest_bytes()
+            manifest_info = tarfile.TarInfo("./manifest.yaml")
+            manifest_info.size = len(manifest_payload)
+            tf.addfile(manifest_info, io.BytesIO(manifest_payload))
+
+            start_payload = _start_script_bytes()
+            start_info = tarfile.TarInfo("./start.sh")
+            start_info.size = len(start_payload)
+            tf.addfile(start_info, io.BytesIO(start_payload))
+
+        file = UploadFile(filename="demo.tar.gz", file=io.BytesIO(buf.getvalue()))
+        payload = await parse_package_manifest(package_zip=file)
+        self.assertTrue(payload["has_manifest"])
+        self.assertEqual(payload["found_path"], "manifest.yaml")
+        self.assertEqual(payload["normalized_manifest"]["app_id"], "demo_app")
+
     def test_artifact_download_filename_preserves_archive_suffix(self) -> None:
         self.assertEqual(
             _artifact_download_filename("demo_app", "1.0.0", "apps/demo_app/1.0.0/package.tar.gz"),
