@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import io
-import tarfile
 import tempfile
+import tarfile
 import unittest
 import zipfile
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 
-from aivudaappstore.backend.app.services.dev_service import parse_package_manifest
+from aivudaappstore.backend.app.services.dev_service import _safe_extract_archive, parse_package_manifest
 from aivudaappstore.backend.app.services.store_service import _artifact_download_filename
 
 
@@ -32,8 +32,13 @@ def _start_script_bytes() -> bytes:
 def _build_zip_bytes() -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("app/manifest.yaml", _manifest_bytes())
-        zf.writestr("app/start.sh", _start_script_bytes())
+        manifest_info = zipfile.ZipInfo("app/manifest.yaml")
+        manifest_info.external_attr = (0o644 & 0xFFFF) << 16
+        zf.writestr(manifest_info, _manifest_bytes())
+
+        start_info = zipfile.ZipInfo("app/start.sh")
+        start_info.external_attr = (0o755 & 0xFFFF) << 16
+        zf.writestr(start_info, _start_script_bytes())
     return buf.getvalue()
 
 
@@ -117,6 +122,35 @@ class ArchiveSupportTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload["has_manifest"])
         self.assertEqual(payload["found_path"], "manifest.yaml")
         self.assertEqual(payload["normalized_manifest"]["app_id"], "demo_app")
+
+    def test_safe_extract_archive_preserves_tar_file_mode(self) -> None:
+        archive_path = None
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_root = Path(tmpdir)
+            archive_path = tmp_root / "demo.tar.gz"
+            archive_path.write_bytes(_build_tar_bytes("w:gz"))
+
+            dest_dir = tmp_root / "out"
+            dest_dir.mkdir()
+            _safe_extract_archive(archive_path, dest_dir, kind="tar.gz", prefix="app/")
+
+            extracted = dest_dir / "start.sh"
+            self.assertTrue(extracted.exists())
+            self.assertEqual(extracted.stat().st_mode & 0o777, 0o755)
+
+    def test_safe_extract_archive_preserves_zip_file_mode_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_root = Path(tmpdir)
+            archive_path = tmp_root / "demo.zip"
+            archive_path.write_bytes(_build_zip_bytes())
+
+            dest_dir = tmp_root / "out"
+            dest_dir.mkdir()
+            _safe_extract_archive(archive_path, dest_dir, kind="zip", prefix="app/")
+
+            extracted = dest_dir / "start.sh"
+            self.assertTrue(extracted.exists())
+            self.assertEqual(extracted.stat().st_mode & 0o777, 0o755)
 
     def test_artifact_download_filename_preserves_archive_suffix(self) -> None:
         self.assertEqual(

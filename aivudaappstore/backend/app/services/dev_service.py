@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -377,6 +378,11 @@ def _safe_extract_archive(
     kind: ArchiveKind,
     prefix: str = "",
 ) -> None:
+    def apply_mode(target: Path, mode: int) -> None:
+        sanitized = mode & 0o7777
+        if sanitized:
+            os.chmod(target, sanitized)
+
     dest_real = dest_dir.resolve()
     if kind == "zip":
         try:
@@ -399,6 +405,8 @@ def _safe_extract_archive(
                     member_path.parent.mkdir(parents=True, exist_ok=True)
                     with zf.open(member) as src, member_path.open("wb") as dst:
                         dst.write(src.read())
+                    zip_mode = (member.external_attr >> 16) & 0o7777
+                    apply_mode(member_path, zip_mode)
             return
         except zipfile.BadZipFile as exc:
             raise HTTPException(status_code=400, detail="Package archive is not a valid zip file") from exc
@@ -428,6 +436,7 @@ def _safe_extract_archive(
                 member_path.parent.mkdir(parents=True, exist_ok=True)
                 with extracted as src, member_path.open("wb") as dst:
                     shutil.copyfileobj(src, dst)
+                apply_mode(member_path, member.mode)
     except tarfile.TarError as exc:
         raise HTTPException(status_code=400, detail="Package archive is not a valid tar archive") from exc
 
