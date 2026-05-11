@@ -38,11 +38,15 @@ def _normalize_zip_name(name: str) -> str:
     return name
 
 
-ArchiveKind = Literal["zip", "tar.gz", "tgz", "tar"]
+ArchiveKind = Literal["zip", "tar.gz", "tgz", "tar", "tar.xz", "txz"]
 
 
 def _detect_archive_kind(filename: str) -> ArchiveKind:
     lowered = str(filename or "").strip().lower()
+    if lowered.endswith(".tar.xz"):
+        return "tar.xz"
+    if lowered.endswith(".txz"):
+        return "txz"
     if lowered.endswith(".tar.gz"):
         return "tar.gz"
     if lowered.endswith(".tgz"):
@@ -53,7 +57,7 @@ def _detect_archive_kind(filename: str) -> ArchiveKind:
         return "zip"
     raise HTTPException(
         status_code=400,
-        detail="Unsupported package archive format. Supported formats: zip, tar.gz, tgz, tar",
+        detail="Unsupported package archive format. Supported formats: zip, tar.gz, tgz, tar, tar.xz, txz",
     )
 
 
@@ -473,6 +477,8 @@ def _write_archive_from_dir(src_dir: Path, archive_path: Path, *, kind: ArchiveK
     mode = "w"
     if kind in {"tar.gz", "tgz"}:
         mode = "w:gz"
+    elif kind in {"tar.xz", "txz"}:
+        mode = "w:xz"
     with tarfile.open(archive_path, mode) as tf:
         for path in sorted(src_dir.rglob("*")):
             if path.is_dir():
@@ -860,7 +866,14 @@ async def modify_version(
             package_root = FILES_DIR / "apps" / app_id_text / version
 
             # Remove old package file(s) but keep directory contents used by workflow.
-            for pattern in ("package.zip", "package.tar.gz", "package.tgz", "package.tar"):
+            for pattern in (
+                "package.zip",
+                "package.tar.gz",
+                "package.tgz",
+                "package.tar",
+                "package.tar.xz",
+                "package.txz",
+            ):
                 old_pkg = package_root / pattern
                 if old_pkg.exists():
                     old_pkg.unlink()

@@ -48,7 +48,7 @@ async function submit() {
       <form class="flex flex-col gap-8" @submit.prevent="submit">
         <div class="flex flex-col gap-2">
           <div class="relative border-2 border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-950/50 rounded-2xl p-8 hover:border-emerald-500/50 transition-colors flex flex-col items-center justify-center text-center group">
-            <input type="file" accept=".zip,.tar,.tar.gz,.tgz,.gz" @change="bindPackageZip" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
+            <input type="file" accept=".zip,.tar,.tar.gz,.tgz,.tar.xz,.txz,.gz,.xz" @change="bindPackageZip" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" />
             <div class="w-12 h-12 bg-white dark:bg-zinc-800 rounded-full flex items-center justify-center mb-3 group-hover:bg-emerald-50 dark:group-hover:bg-emerald-500/20 text-zinc-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 shadow-sm transition-colors">
               <UploadCloud class="w-6 h-6" />
             </div>

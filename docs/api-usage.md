@@ -66,7 +66,7 @@ Authorization: Bearer <access_token>
 - **POST** `/aivuda_app_store/dev/apps/upload-package`
 - 表单字段：
   - `manifest_json`（必填，JSON 字符串）
-  - `package_zip`（必填，安装包归档文件；历史字段名，支持 `zip` / `tar.gz` / `tgz` / `tar`）
+  - `package_zip`（必填，安装包归档文件；历史字段名，支持 `zip` / `tar.gz` / `tgz` / `tar` / `tar.xz` / `txz`）
   - `name` / `version` / `description`（可传空，最终以 manifest 为准）
 
 成功返回：
@@ -84,7 +84,7 @@ Authorization: Bearer <access_token>
 ### 3.2 解析上传包中的 manifest（前端预检）
 
 - **POST** `/aivuda_app_store/dev/apps/manifest/parse-package`
-- 表单字段：`package_zip`（必填，支持 `zip` / `tar.gz` / `tgz` / `tar`）
+- 表单字段：`package_zip`（必填，支持 `zip` / `tar.gz` / `tgz` / `tar` / `tar.xz` / `txz`）
 
 成功返回字段包括：
 
@@ -99,7 +99,7 @@ Authorization: Bearer <access_token>
 - **POST** `/aivuda_app_store/dev/apps/{app_id}/versions`
 - 表单字段：
   - `manifest_json`（必填）
-  - `package_zip`（必填，支持 `zip` / `tar.gz` / `tgz` / `tar`）
+  - `package_zip`（必填，支持 `zip` / `tar.gz` / `tgz` / `tar` / `tar.xz` / `txz`）
   - `version` / `description`（可选）
 
 说明：
@@ -115,7 +115,7 @@ Authorization: Bearer <access_token>
 - 表单字段：
   - `description`（可选）
   - `manifest_json`（替换包时必需）
-  - `package_zip`（可选，传了表示替换安装包；支持 `zip` / `tar.gz` / `tgz` / `tar`）
+  - `package_zip`（可选，传了表示替换安装包；支持 `zip` / `tar.gz` / `tgz` / `tar` / `tar.xz` / `txz`）
 
 ### 3.5 下架版本
 
@@ -305,7 +305,7 @@ Authorization: Bearer <access_token>
 ### 4.6 下载示例包
 
 - **GET** `/aivuda_app_store/store/sample-package`
-- 返回文件名默认是 `aivuda-app-pkg-example.tar.gz` 示例包；系统安装包实际支持 `zip` / `tar.gz` / `tgz` / `tar`
+- 返回文件名默认是 `aivuda-app-pkg-example.tar.gz` 示例包；系统安装包实际支持 `zip` / `tar.gz` / `tgz` / `tar` / `tar.xz` / `txz`
 
 ## 5. 常见错误码
 

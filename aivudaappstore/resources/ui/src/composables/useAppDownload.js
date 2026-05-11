@@ -17,7 +17,7 @@ function inferFilename(appId, version, info) {
   const url = String(info?.url || "");
   const cleaned = url.split("?")[0];
   const basename = cleaned.split("/").filter(Boolean).pop() || "";
-  const suffixes = basename.match(/(\.tar\.gz|\.tgz|\.tar|\.zip)$/i);
+  const suffixes = basename.match(/(\.tar\.gz|\.tgz|\.tar\.xz|\.txz|\.tar|\.zip)$/i);
   const suffix = suffixes?.[1] || ".zip";
   return `${appId}-${version}${suffix}`;
 }

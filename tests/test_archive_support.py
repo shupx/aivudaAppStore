@@ -80,8 +80,20 @@ class ArchiveSupportTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload["has_manifest"])
         self.assertEqual(payload["normalized_manifest"]["description"], "demo")
 
+    async def test_parse_package_manifest_accepts_tar_xz(self) -> None:
+        file = UploadFile(filename="demo.tar.xz", file=io.BytesIO(_build_tar_bytes("w:xz")))
+        payload = await parse_package_manifest(package_zip=file)
+        self.assertTrue(payload["has_manifest"])
+        self.assertEqual(payload["normalized_manifest"]["app_id"], "demo_app")
+
+    async def test_parse_package_manifest_accepts_txz(self) -> None:
+        file = UploadFile(filename="demo.txz", file=io.BytesIO(_build_tar_bytes("w:xz")))
+        payload = await parse_package_manifest(package_zip=file)
+        self.assertTrue(payload["has_manifest"])
+        self.assertEqual(payload["normalized_manifest"]["name"], "Demo App")
+
     async def test_parse_package_manifest_rejects_unsupported_extension(self) -> None:
-        file = UploadFile(filename="demo.tar.xz", file=io.BytesIO(b"invalid"))
+        file = UploadFile(filename="demo.rar", file=io.BytesIO(b"invalid"))
         with self.assertRaises(HTTPException) as ctx:
             await parse_package_manifest(package_zip=file)
         self.assertEqual(ctx.exception.status_code, 400)
@@ -118,6 +130,14 @@ class ArchiveSupportTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             _artifact_download_filename("demo_app", "1.0.0", "apps/demo_app/1.0.0/package.tar"),
             "demo_app-1.0.0.tar",
+        )
+        self.assertEqual(
+            _artifact_download_filename("demo_app", "1.0.0", "apps/demo_app/1.0.0/package.tar.xz"),
+            "demo_app-1.0.0.tar.xz",
+        )
+        self.assertEqual(
+            _artifact_download_filename("demo_app", "1.0.0", "apps/demo_app/1.0.0/package.txz"),
+            "demo_app-1.0.0.txz",
         )
         self.assertEqual(
             _artifact_download_filename("demo_app", "1.0.0", "apps/demo_app/1.0.0/package.zip"),
