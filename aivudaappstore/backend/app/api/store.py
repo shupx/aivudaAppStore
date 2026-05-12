@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from starlette.responses import Response
 
+from aivudaappstore import __version__
 from aivudaappstore.backend.app.services.store_service import (
     store_app_detail as service_store_app_detail,
     store_caddy_local_ca_root as service_store_caddy_local_ca_root,
@@ -22,6 +23,11 @@ router = APIRouter(prefix="/store", tags=["store"])
 @router.get("/index")
 async def store_index() -> Dict[str, Any]:
     return service_store_index()
+
+
+@router.get("/meta/version")
+async def store_version() -> Dict[str, str]:
+    return {"version": __version__}
 
 
 @router.get("/sample-package")

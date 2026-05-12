@@ -1,4 +1,7 @@
 {
+  "app": {
+    "versionBadge": "v{version}"
+  },
   "common": {
     "back": "返回",
     "allApps": "全部应用",

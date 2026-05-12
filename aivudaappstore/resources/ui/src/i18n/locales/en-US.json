@@ -1,4 +1,7 @@
 {
+  "app": {
+    "versionBadge": "v{version}"
+  },
   "common": {
     "back": "Back",
     "allApps": "All Apps",

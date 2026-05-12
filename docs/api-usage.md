@@ -247,7 +247,25 @@ Authorization: Bearer <access_token>
 
 > 这些接口默认不要求 token，可被客户端直接访问。
 
-### 4.1 首页索引（每个应用仅最新已发布版本）
+### 4.1 当前 AppStore 运行版本
+
+- **GET** `/aivuda_app_store/store/meta/version`
+
+返回示例：
+
+```json
+{
+  "version": "0.1.0.dev2026051201"
+}
+```
+
+说明：
+
+- 返回当前运行中的 `aivudaappstore` Python 包版本。
+- 前端右下角全局版本角标使用该接口展示版本。
+- 该版本值代表实际安装运行版本，不是前端 `package.json` 版本。
+
+### 4.2 首页索引（每个应用仅最新已发布版本）
 
 - **GET** `/aivuda_app_store/store/index`
 
@@ -267,7 +285,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-### 4.2 应用详情（含全部版本）
+### 4.3 应用详情（含全部版本）
 
 - **GET** `/aivuda_app_store/store/apps/{app_id}`
 
@@ -277,11 +295,11 @@ Authorization: Bearer <access_token>
 - `versions`: 所有版本（包含 published / unpublished）
 - `items`: 仅 published 版本（兼容字段）
 
-### 4.3 获取指定已发布版本 manifest
+### 4.4 获取指定已发布版本 manifest
 
 - **GET** `/aivuda_app_store/store/apps/{app_id}/versions/{version}/manifest`
 
-### 4.4 获取下载地址
+### 4.5 获取下载地址
 
 - **GET** `/aivuda_app_store/store/apps/{app_id}/versions/{version}/download-url`
 
@@ -296,13 +314,13 @@ Authorization: Bearer <access_token>
 }
 ```
 
-### 4.5 下载安装包
+### 4.6 下载安装包
 
 - **GET** `/aivuda_app_store/store/apps/{app_id}/versions/{version}/download`
 - 返回 `307` 重定向到 Caddy 静态文件路径 `/aivuda_app_store/files/*`
 - 实际文件由 Caddy 直接托管，不再由后端 `FileResponse` 流式输出
 
-### 4.6 下载示例包
+### 4.7 下载示例包
 
 - **GET** `/aivuda_app_store/store/sample-package`
 - 返回文件名默认是 `aivuda-app-pkg-example.tar.gz` 示例包；系统安装包实际支持 `zip` / `tar.gz` / `tgz` / `tar` / `tar.xz` / `txz`

@@ -91,6 +91,10 @@ export async function fetchStoreApps() {
   return request("/store/index", { auth: true });
 }
 
+export async function fetchAppStoreVersion() {
+  return request("/store/meta/version");
+}
+
 export async function fetchStoreAppDetail(appId) {
   return request(`/store/apps/${encodeURIComponent(appId)}`, { auth: true });
 }
