@@ -101,6 +101,6 @@ AIVUDAAPPSTORE_BUILD_SEQ=01 python -m build
 # AIVUDAAPPSTORE_BUILD_SEQ=01 PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple python -m build  # use pypi mirror
 ```
 
-The wheel includes only `aivudaappstore/resources/ui/dist`, while the sdist keeps the frontend source and excludes `dist` and `node_modules`.
+The wheel keeps only `aivudaappstore/resources/ui/dist` from the main frontend resource directory, while the sdist keeps the frontend source and excludes `dist` and `node_modules`.
 
 For development details, see [README_dev.md](README_dev.md).

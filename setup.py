@@ -14,6 +14,7 @@ from setuptools.command.sdist import sdist as _sdist
 ROOT = Path(__file__).resolve().parent
 SOURCE_ROOT = ROOT
 BASE_VERSION = "0.1.0"
+PACKAGED_UI_PATH = SOURCE_ROOT / "aivudaappstore" / "resources" / "ui"
 SDIST_EXCLUDED_PATHS = (
     Path("aivudaappstore/resources/ui/node_modules"),
     Path("aivudaappstore/resources/ui/dist"),
@@ -64,7 +65,7 @@ def read_requirements() -> list:
 
 
 def ensure_ui_dist() -> None:
-    ui_dir = SOURCE_ROOT / "aivudaappstore" / "resources" / "ui"
+    ui_dir = PACKAGED_UI_PATH
     package_json = ui_dir / "package.json"
     dist_dir = ui_dir / "dist"
 
@@ -96,9 +97,9 @@ class build_py(_build_py):
 
     @staticmethod
     def _ignore_packaged_resources(directory: str, entries: list) -> list:
-        current = Path(directory)
+        current = Path(directory).resolve()
         ignored = {name for name in entries if name in {"node_modules", ".vite", ".vite-temp"}}
-        if current.name == "ui":
+        if current == PACKAGED_UI_PATH:
             ignored.update(name for name in entries if name != "dist")
         return sorted(ignored)
 
