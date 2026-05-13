@@ -15,6 +15,14 @@ pip install -i https://pypi.tuna.tsinghua.edu.cn/simple aivudaappstore # may not
 pip install aivudaappstore-0.3.0.devYYYYMMDDNN-py3-none-any.whl
 ```
 
+If you install with `conda`, activate the target environment first and keep using that same environment for `aivudaappstore install`, `aivudaappstore start`, and related commands:
+
+```bash
+conda create -n aivuda python=3.10 -y
+conda activate aivuda
+pip install aivudaappstore
+```
+
 It is recommended to ensure your user-local bin directory is in `PATH`:
 
 ```bash
@@ -29,6 +37,8 @@ Run the install command once to prepare runtime dependencies, download Caddy, an
 ```bash
 aivudaappstore install
 ```
+
+When `aivudaappstore install` is executed inside an activated `conda` environment, the generated `aivudaappstore.service` will remember that environment's Python interpreter for later restarts and boot auto-start.
 
 During installation you will be prompted for (optional, you can press Enter to skip if deploying for local use):
 

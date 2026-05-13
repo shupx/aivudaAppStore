@@ -25,10 +25,39 @@ DOWNLOAD_CADDY_HELPER="${SCRIPT_DIR}/_download_caddy.sh"
 APPSTORE_PUBLIC_HTTPS_HOST="${APPSTORE_PUBLIC_HTTPS_HOST:-}"
 APPSTORE_PRIVATE_HTTPS_HOST="${APPSTORE_PRIVATE_HTTPS_HOST:-}"
 WORKING_DIRECTORY="${RUNTIME_ROOT}"
+AIVUDAAPPSTORE_PYTHON="${AIVUDAAPPSTORE_PYTHON:-}"
 
 if [[ -n "${SOURCE_ROOT}" ]]; then
   WORKING_DIRECTORY="${SOURCE_ROOT}"
 fi
+
+resolve_python_bin() {
+  if [[ -n "${AIVUDAAPPSTORE_PYTHON}" ]]; then
+    if [[ -x "${AIVUDAAPPSTORE_PYTHON}" ]]; then
+      return 0
+    fi
+    echo "Configured AIVUDAAPPSTORE_PYTHON is not executable: ${AIVUDAAPPSTORE_PYTHON}" >&2
+    exit 1
+  fi
+
+  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/python" ]]; then
+    AIVUDAAPPSTORE_PYTHON="${CONDA_PREFIX}/bin/python"
+    return 0
+  fi
+
+  if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/python" ]]; then
+    AIVUDAAPPSTORE_PYTHON="${VIRTUAL_ENV}/bin/python"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    AIVUDAAPPSTORE_PYTHON="$(command -v python3)"
+    return 0
+  fi
+
+  echo "python3 not found in PATH, and no usable AIVUDAAPPSTORE_PYTHON/CONDA_PREFIX/VIRTUAL_ENV was detected." >&2
+  exit 1
+}
 
 list_local_ipv4_candidates() {
   local ip_list=()
@@ -111,6 +140,7 @@ ensure_user_linger_enabled() {
 
 mkdir -p "${USER_SYSTEMD_DIR}" "${RUNTIME_ROOT}/config" "${RUNTIME_ROOT}/data/files/apps" "${RUNTIME_ROOT}/samples"
 
+resolve_python_bin
 ensure_https_hosts
 ensure_user_linger_enabled
 
@@ -137,6 +167,7 @@ Type=simple
 WorkingDirectory=${WORKING_DIRECTORY}
 Environment=AIVUDAAPPSTORE_WS_ROOT=${RUNTIME_ROOT}
 Environment=AIVUDAAPPSTORE_PACKAGE_ROOT=${PACKAGE_ROOT}
+Environment=AIVUDAAPPSTORE_PYTHON=${AIVUDAAPPSTORE_PYTHON}
 Environment=APPSTORE_PUBLIC_HTTPS_HOST=${APPSTORE_PUBLIC_HTTPS_HOST}
 Environment=APPSTORE_PRIVATE_HTTPS_HOST=${APPSTORE_PRIVATE_HTTPS_HOST}
 Environment=AIVUDAAPPSTORE_FRONTEND_DIST=${FRONTEND_DIST}

@@ -34,11 +34,22 @@ aivudaappstore restart
 bash aivudaappstore/resources/scripts/_run_aivudaappstore_stack.sh
 ```
 
+如果你是通过 `conda` 安装 `aivudaappstore`，请先激活环境再执行启动脚本：
+
+```bash
+conda activate aivuda
+bash aivudaappstore/resources/scripts/_run_aivudaappstore_stack.sh
+```
+
+脚本会优先使用 `AIVUDAAPPSTORE_PYTHON`，其次自动识别 `CONDA_PREFIX/bin/python`、`VIRTUAL_ENV/bin/python`，最后才回退到当前 `PATH` 中的 `python3`。
+
 开发模式：
 
 ```bash
 bash aivudaappstore/resources/scripts/_run_aivudaappstore_stack.sh --dev
 ```
+
+如果当前 shell 已激活 `conda` 环境，安装脚本会把该环境对应的 Python 解释器写入 `aivudaappstore.service` 的 `AIVUDAAPPSTORE_PYTHON`，这样 `systemd --user` 在重启或开机自启动时也不会丢失到系统 Python。
 
 当前路由保持：
 

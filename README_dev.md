@@ -54,6 +54,8 @@ APPSTORE_PRIVATE_HTTPS_HOST=127.0.0.1 \
 bash aivudaappstore/resources/scripts/_run_aivudaappstore_stack.sh --dev
 ```
 
+如果当前 shell 已激活 `conda` 环境，脚本会优先使用该环境的 `python`。
+
 生产式本地启动：
 
 ```bash
@@ -62,6 +64,8 @@ npm run build
 cd ../../..
 bash aivudaappstore/resources/scripts/_run_aivudaappstore_stack.sh
 ```
+
+如果执行安装脚本时已经激活 `conda` 环境，生成的 `aivudaappstore.service` 会固定使用该环境对应的 Python 解释器。
 
 ## 打包与发布
 
@@ -92,4 +96,3 @@ CI 流程包含：
   - 密码：`admin123`
 
 ## 更多架构细节
-

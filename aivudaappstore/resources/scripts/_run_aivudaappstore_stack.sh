@@ -16,6 +16,35 @@ fi
 RUNTIME_ROOT="${AIVUDAAPPSTORE_WS_ROOT:-${HOME}/aivudaAppStore_ws}"
 PYTHONPATH_PREFIX="${PYTHONPATH:-}"
 DEV_MODE=0
+PYTHON_BIN="${AIVUDAAPPSTORE_PYTHON:-}"
+
+resolve_python_bin() {
+  if [[ -n "${PYTHON_BIN}" ]]; then
+    if [[ -x "${PYTHON_BIN}" ]]; then
+      return 0
+    fi
+    echo "Configured AIVUDAAPPSTORE_PYTHON is not executable: ${PYTHON_BIN}" >&2
+    exit 1
+  fi
+
+  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/python" ]]; then
+    PYTHON_BIN="${CONDA_PREFIX}/bin/python"
+    return 0
+  fi
+
+  if [[ -n "${VIRTUAL_ENV:-}" && -x "${VIRTUAL_ENV}/bin/python" ]]; then
+    PYTHON_BIN="${VIRTUAL_ENV}/bin/python"
+    return 0
+  fi
+
+  if command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3)"
+    return 0
+  fi
+
+  echo "python3 not found in PATH, and no usable AIVUDAAPPSTORE_PYTHON/CONDA_PREFIX/VIRTUAL_ENV was detected." >&2
+  exit 1
+}
 
 usage() {
   cat <<EOF
@@ -43,6 +72,8 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+resolve_python_bin
 
 CADDY_BIN="${RUNTIME_ROOT}/.tools/caddy/caddy"
 CADDY_TEMPLATE="${PACKAGE_ROOT}/caddy/Caddyfile_template"
@@ -96,9 +127,9 @@ export APPSTORE_PRIVATE_HTTPS_HOST="${APPSTORE_PRIVATE_HTTPS_HOST:-127.0.0.1}"
 cd "${RUNTIME_ROOT}"
 
 if [[ "${DEV_MODE}" -eq 1 ]]; then
-  env PYTHONPATH="${PYTHONPATH_PREFIX}" /usr/bin/env python3 -m uvicorn aivudaappstore.backend.main:app --host 127.0.0.1 --port 9001 --reload --reload-dir "${SOURCE_ROOT}/aivudaappstore/backend" &
+  env PYTHONPATH="${PYTHONPATH_PREFIX}" "${PYTHON_BIN}" -m uvicorn aivudaappstore.backend.main:app --host 127.0.0.1 --port 9001 --reload --reload-dir "${SOURCE_ROOT}/aivudaappstore/backend" &
 else
-  env PYTHONPATH="${PYTHONPATH_PREFIX}" /usr/bin/env python3 -m gunicorn -w 1 -k uvicorn.workers.UvicornWorker aivudaappstore.backend.main:app -b 127.0.0.1:9001 &
+  env PYTHONPATH="${PYTHONPATH_PREFIX}" "${PYTHON_BIN}" -m gunicorn -w 1 -k uvicorn.workers.UvicornWorker aivudaappstore.backend.main:app -b 127.0.0.1:9001 &
 fi
 backend_pid=$!
 
