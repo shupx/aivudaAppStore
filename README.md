@@ -15,6 +15,13 @@ pip install -i https://pypi.tuna.tsinghua.edu.cn/simple aivudaappstore # may not
 pip install aivudaappstore-0.3.0.devYYYYMMDDNN-py3-none-any.whl
 ```
 
+It is recommended to ensure your user-local bin directory is in `PATH`:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
 If you install with `conda`, activate the target environment first and keep using that same environment for `aivudaappstore install`, `aivudaappstore start`, and related commands:
 
 ```bash
@@ -23,11 +30,10 @@ conda activate aivuda
 pip install aivudaappstore
 ```
 
-It is recommended to ensure your user-local bin directory is in `PATH`:
+To upgrade:
 
 ```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
+pip install --upgrade aivudaappstore
 ```
 
 ## First Start
