@@ -76,6 +76,7 @@ aivudaappstore enable-autostart
 aivudaappstore disable-autostart
 aivudaappstore download-caddy
 aivudaappstore uninstall
+aivudaappstore reset-admin-password
 ```
 
 To print the current web addresses:

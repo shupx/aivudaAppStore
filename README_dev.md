@@ -95,4 +95,8 @@ CI 流程包含：
   - 用户名：`admin`
   - 密码：`admin123`
 
+- 如果忘记 `admin` 密码，可以在本机执行：
+  - `aivudaappstore reset-admin-password`
+  - 或非交互方式：`aivudaappstore reset-admin-password --password NEW_PASSWORD`
+
 ## 更多架构细节

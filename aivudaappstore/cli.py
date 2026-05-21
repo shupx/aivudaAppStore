@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import getpass
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -8,6 +9,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from aivudaappstore import __version__
+from aivudaappstore.backend.app.core.settings import DB_PATH
+from aivudaappstore.backend.app.services.auth import hash_password
+from aivudaappstore.backend.app.services.db import db_conn
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,7 @@ def _print_main_help() -> int:
     print("Commands:")
     for command in COMMANDS.values():
         print("  {0:<18} {1}".format(command.name, command.summary))
+    print("  reset-admin-password Reset the local admin password in repo.db.")
     print("  version            Print the installed Aivuda AppStore package version.")
     print("")
     print("Run 'aivudaappstore <command> --help' for command-specific usage.")
@@ -137,6 +142,72 @@ def _run_shell_script(command: CommandSpec, forwarded_args: List[str]) -> int:
     return completed.returncode
 
 
+def _print_reset_admin_password_help() -> int:
+    print("Usage: aivudaappstore reset-admin-password [--password NEW_PASSWORD]")
+    print("")
+    print("Reset the local admin user's password in repo.db and revoke admin sessions.")
+    print("")
+    print("Options:")
+    print("  --password NEW_PASSWORD   Set the new password non-interactively.")
+    return 0
+
+
+def _run_reset_admin_password(forwarded_args: List[str]) -> int:
+    if any(arg in {"-h", "--help"} for arg in forwarded_args):
+        return _print_reset_admin_password_help()
+
+    password: Optional[str] = None
+    idx = 0
+    while idx < len(forwarded_args):
+        arg = forwarded_args[idx]
+        if arg == "--password":
+            if idx + 1 >= len(forwarded_args):
+                print("--password requires a value", file=sys.stderr)
+                return 2
+            password = forwarded_args[idx + 1]
+            idx += 2
+            continue
+        print("Unknown argument for reset-admin-password: {0}".format(arg), file=sys.stderr)
+        return 2
+
+    if password is None:
+        first = getpass.getpass("New admin password: ")
+        second = getpass.getpass("Confirm new admin password: ")
+        if first != second:
+            print("Passwords do not match.", file=sys.stderr)
+            return 2
+        password = first
+
+    password = str(password or "")
+    if len(password) < 6:
+        print("Password must be at least 6 characters long.", file=sys.stderr)
+        return 2
+
+    if not DB_PATH.exists():
+        print("Database not found: {0}".format(DB_PATH), file=sys.stderr)
+        print("Start or install aivudaappstore once to initialize the workspace.", file=sys.stderr)
+        return 1
+
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM developer_user WHERE username = 'admin'"
+        ).fetchone()
+        if not row:
+            print("Admin user was not found in the database.", file=sys.stderr)
+            return 1
+
+        conn.execute(
+            "UPDATE developer_user SET password_hash = ?, updated_at = strftime('%s','now') WHERE id = ?",
+            (hash_password(password), row["id"]),
+        )
+        conn.execute("DELETE FROM dev_session WHERE user_id = ?", (row["id"],))
+        conn.commit()
+
+    print("Admin password was reset successfully.")
+    print("Database: {0}".format(DB_PATH))
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
 
@@ -156,6 +227,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if head in {"-V", "--version", "version"}:
         print(__version__)
         return 0
+
+    if head == "reset-admin-password":
+        return _run_reset_admin_password(args[1:])
 
     command = COMMANDS.get(head)
     if command is None:
