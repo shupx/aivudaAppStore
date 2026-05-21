@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 from aivudaappstore.backend.app.core.settings import DATA_DIR, FILES_DIR, TMP_DIR
-from aivudaappstore.backend.app.services.db import create_audit_log, db_conn
+from aivudaappstore.backend.app.services.db import create_audit_log, db_conn, ensure_app_admin_member
 from aivudaappstore.backend.app.services.utils import now_ts
 
 
@@ -343,6 +343,21 @@ def _create_subset_repo_db(target_db_path: Path, selected_app_ids: Optional[List
                     for row in selected_app_rows
                 ],
             )
+            target_conn.executemany(
+                """
+                INSERT INTO app_member (app_id, user_id, role, created_at, updated_at)
+                VALUES (?, ?, 'admin', ?, ?)
+                """,
+                [
+                    (
+                        row["id"],
+                        row["owner_user_id"],
+                        row["created_at"],
+                        row["updated_at"],
+                    )
+                    for row in selected_app_rows
+                ],
+            )
 
         version_rows = []
         target_rows = []
@@ -610,6 +625,7 @@ def _import_single_app(
             ),
         )
         app_pk = cur.lastrowid
+        ensure_app_admin_member(conn, app_pk=app_pk, user_id=int(user["user_id"]))
 
         for version in app["versions"]:
             cur = conn.execute(

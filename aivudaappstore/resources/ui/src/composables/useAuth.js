@@ -1,19 +1,28 @@
 import { reactive } from "vue";
-import { login, session } from "../services/api";
+import { login, register, session } from "../services/api";
 
 export function useAuth(t) {
-  const form = reactive({ username: "admin", password: "admin123" });
-  const status = reactive({ text: t("login.notLoggedIn") });
+  const form = reactive({ username: "", password: "" });
+  const status = reactive({ text: t("login.notLoggedIn"), loading: false, type: "info" });
 
-  async function loginWithForm({ onSuccess } = {}) {
+  async function submitAuth(mode, { onSuccess } = {}) {
+    status.loading = true;
     try {
-      const data = await login(form.username, form.password);
-      status.text = t("login.success", { username: data.user.username });
+      const action = mode === "register" ? register : login;
+      const data = await action(form.username, form.password);
+      localStorage.setItem("appstore_last_username", form.username);
+      status.type = "success";
+      status.text = mode === "register"
+        ? t("login.registerSuccess", { username: data.user.username })
+        : t("login.success", { username: data.user.username });
       if (onSuccess) onSuccess(data);
       return data;
     } catch (err) {
+      status.type = "error";
       status.text = String(err);
       return null;
+    } finally {
+      status.loading = false;
     }
   }
 
@@ -21,6 +30,11 @@ export function useAuth(t) {
     session,
     form,
     status,
-    loginWithForm,
+    loginWithForm(options) {
+      return submitAuth("login", options);
+    },
+    registerWithForm(options) {
+      return submitAuth("register", options);
+    },
   };
 }

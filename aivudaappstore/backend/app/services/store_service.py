@@ -3,7 +3,7 @@ from __future__ import annotations
 import mimetypes
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from urllib.parse import quote
 import tarfile
 
@@ -18,7 +18,16 @@ from aivudaappstore.backend.app.core.settings import (
     SAMPLES_SOURCE_DIR,
     ensure_storage_dirs,
 )
-from aivudaappstore.backend.app.services.db import build_manifest, db_conn, get_targets, pick_largest_published_version
+from aivudaappstore.backend.app.services.db import (
+    build_manifest,
+    compute_app_permissions,
+    db_conn,
+    get_app_member_role,
+    get_app_members,
+    get_targets,
+    pick_largest_published_version,
+    serialize_member,
+)
 from aivudaappstore.backend.app.services.utils import now_ts
 
 SAMPLE_DIR = SAMPLES_DIR
@@ -38,7 +47,14 @@ def _artifact_download_filename(app_id: str, version: str, artifact_relpath: str
 
 def store_index() -> Dict[str, Any]:
     with db_conn() as conn:
-        apps = conn.execute("SELECT id, app_id, name, description FROM app ORDER BY app_id").fetchall()
+        apps = conn.execute(
+            """
+            SELECT a.id, a.app_id, a.name, a.description, a.owner_user_id, u.username AS owner_username
+            FROM app a
+            JOIN developer_user u ON u.id = a.owner_user_id
+            ORDER BY a.app_id
+            """
+        ).fetchall()
 
         items = []
         for app_row in apps:
@@ -54,6 +70,8 @@ def store_index() -> Dict[str, Any]:
                     "app_id": app_row["app_id"],
                     "version": version_row["version"],
                     "manifest": manifest,
+                    "owner_user_id": app_row["owner_user_id"],
+                    "owner_username": app_row["owner_username"],
                     "created_at": version_row["created_at"],
                     "published_at": version_row["published_at"],
                     "updated_at": version_row["updated_at"],
@@ -96,11 +114,16 @@ def store_caddy_local_ca_root() -> FileResponse:
     )
 
 
-def store_app_detail(app_id: str) -> Dict[str, Any]:
+def store_app_detail(app_id: str, current_user: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     with db_conn() as conn:
         app_row = conn.execute("SELECT * FROM app WHERE app_id = ?", (app_id,)).fetchone()
         if not app_row:
             raise HTTPException(status_code=404, detail="App not found")
+        member_role = None
+        if current_user:
+            member_role = get_app_member_role(conn, app_pk=app_row["id"], user_id=int(current_user["user_id"]))
+        permissions = compute_app_permissions(user=current_user, app_member_role=member_role)
+        members = [serialize_member(row) for row in get_app_members(conn, app_pk=app_row["id"])]
 
         all_versions = conn.execute(
             """
@@ -153,6 +176,8 @@ def store_app_detail(app_id: str) -> Dict[str, Any]:
             "created_at": app_row["created_at"],
             "updated_at": app_row["updated_at"],
         },
+        "permissions": permissions,
+        "members": members,
         "versions": versions,
         "items": items,
     }

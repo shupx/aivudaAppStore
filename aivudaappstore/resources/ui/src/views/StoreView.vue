@@ -1,12 +1,12 @@
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import AppCard from "../components/AppCard.vue";
 import AppTopBar from "../components/AppTopBar.vue";
 import { fetchMe, fetchStoreApps, logout, deleteApp, session } from "../services/api";
 import { useAppDownload } from "../composables/useAppDownload";
-import { Loader2, Inbox, Search, ArrowUpDown, Check, ArrowUp, ArrowDown } from "lucide-vue-next";
+import { Loader2, Inbox, Search, ArrowUpDown, Check, ArrowUp, ArrowDown, Funnel } from "lucide-vue-next";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -17,6 +17,9 @@ const sortKey = ref("updated_at");
 const sortDirection = ref("desc");
 const downloadingId = ref("");
 const deletingId = ref("");
+const ownerFilterOpen = ref(false);
+const selectedOwners = ref([]);
+const ownerFilterRef = ref(null);
 const { downloadAppPackage } = useAppDownload();
 const sortOptions = computed(() => ([
   { key: "name", label: t("store.sortName") },
@@ -25,16 +28,37 @@ const sortOptions = computed(() => ([
 ]));
 
 const isAdmin = () => session.user?.role === "admin";
+const ownerOptions = computed(() => {
+  const seen = new Set();
+  const currentUser = String(session.user?.username || "").trim();
+  const options = [];
+
+  if (currentUser) {
+    seen.add(currentUser);
+    options.push(currentUser);
+  }
+
+  for (const item of apps.value) {
+    const owner = String(item?.owner_username || "").trim();
+    if (!owner || seen.has(owner)) continue;
+    seen.add(owner);
+    options.push(owner);
+  }
+
+  return options;
+});
 
 const filteredApps = computed(() => {
   const keyword = searchText.value.trim().toLowerCase();
   const list = apps.value.filter((item) => {
+    if (selectedOwners.value.length > 0 && !selectedOwners.value.includes(item?.owner_username || "")) return false;
     if (!keyword) return true;
     const haystacks = [
       item?.manifest?.name,
       item?.app_id,
       item?.manifest?.description,
       item?.version,
+      item?.owner_username,
     ]
       .map((value) => String(value || "").toLowerCase());
     return haystacks.some((value) => value.includes(keyword));
@@ -121,7 +145,42 @@ function setSortKey(nextKey) {
   sortDirection.value = nextKey === "name" ? "asc" : "desc";
 }
 
-onMounted(load);
+function toggleOwnerFilter() {
+  ownerFilterOpen.value = !ownerFilterOpen.value;
+}
+
+function toggleOwner(owner) {
+  if (selectedOwners.value.includes(owner)) {
+    selectedOwners.value = selectedOwners.value.filter((item) => item !== owner);
+    return;
+  }
+  selectedOwners.value = [...selectedOwners.value, owner];
+}
+
+function clearOwnerFilter() {
+  selectedOwners.value = [];
+}
+
+function selectAllOwners() {
+  selectedOwners.value = [...ownerOptions.value];
+}
+
+function handleDocumentClick(event) {
+  if (!ownerFilterOpen.value) return;
+  const container = ownerFilterRef.value;
+  if (!container) return;
+  if (container.contains(event.target)) return;
+  ownerFilterOpen.value = false;
+}
+
+onMounted(() => {
+  load();
+  document.addEventListener("click", handleDocumentClick);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", handleDocumentClick);
+});
 </script>
 
 <template>
@@ -136,14 +195,60 @@ onMounted(load);
       </h2>
 
       <div class="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <label class="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm text-zinc-500 shadow-sm transition-colors focus-within:border-emerald-500 dark:border-zinc-700/60 dark:bg-zinc-900/80 dark:text-zinc-400">
-          <Search class="h-4 w-4" />
-          <input
-            v-model.trim="searchText"
-            :placeholder="t('store.searchPlaceholder')"
-            class="w-full min-w-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500 md:w-80"
-          />
-        </label>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm text-zinc-500 shadow-sm transition-colors focus-within:border-emerald-500 dark:border-zinc-700/60 dark:bg-zinc-900/80 dark:text-zinc-400">
+            <Search class="h-4 w-4" />
+            <input
+              v-model.trim="searchText"
+              :placeholder="t('store.searchPlaceholder')"
+              class="w-full min-w-0 bg-transparent text-sm text-zinc-900 outline-none placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500 md:w-80"
+            />
+          </label>
+          <div ref="ownerFilterRef" class="relative">
+            <button
+              type="button"
+              class="inline-flex h-10 w-10 items-center justify-center text-zinc-500 transition-colors hover:text-emerald-600 dark:text-zinc-300 dark:hover:text-emerald-300"
+              :class="selectedOwners.length > 0 ? 'text-emerald-600 dark:text-emerald-300' : ''"
+              :title="t('store.filterByOwner')"
+              @click="toggleOwnerFilter"
+            >
+              <Funnel class="h-4 w-4" />
+            </button>
+            <div v-if="ownerFilterOpen" class="absolute left-0 top-14 z-20 min-w-[260px] rounded-2xl border border-zinc-200 bg-white/95 p-3 shadow-xl dark:border-zinc-700/60 dark:bg-zinc-900/95">
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <span class="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{{ t("store.filterByOwner") }}</span>
+                <div class="flex items-center gap-3">
+                  <button type="button" class="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200" @click="selectAllOwners">
+                    {{ t("store.selectAllOwners") }}
+                  </button>
+                  <button type="button" class="text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200" @click="clearOwnerFilter">
+                    {{ t("store.clearOwnerFilter") }}
+                  </button>
+                </div>
+              </div>
+              <div class="flex max-h-64 flex-col gap-1 overflow-auto">
+                <button
+                  v-for="owner in ownerOptions"
+                  :key="owner"
+                  type="button"
+                  class="flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors"
+                  :class="selectedOwners.includes(owner)
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'"
+                  @click="toggleOwner(owner)"
+                >
+                  <span>
+                    {{ owner }}
+                    <span v-if="owner === session.user?.username" class="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
+                      {{ t("store.currentUserBadge") }}
+                    </span>
+                  </span>
+                  <Check v-if="selectedOwners.includes(owner)" class="h-4 w-4 shrink-0" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <div class="flex flex-wrap items-center gap-2">
           <span class="text-sm text-zinc-500 dark:text-zinc-400">{{ t("store.sortBy") }}</span>
@@ -188,6 +293,7 @@ onMounted(load);
           :title="item.manifest?.name || item.app_id"
           :subtitle="t('store.newestVersionPrefix', { version: item.version })"
           :description="item.manifest?.description || ''"
+          :owner-username="item.owner_username || ''"
           :created-at="item.created_at"
           :updated-at="item.updated_at"
           :downloading="downloadingId === `${item.app_id}:${item.version}`"

@@ -75,6 +75,17 @@ export async function login(username, password) {
   return data;
 }
 
+export async function register(username, password) {
+  const fd = new FormData();
+  fd.append("username", username);
+  fd.append("password", password);
+  const data = await request("/dev/auth/register", { method: "POST", body: fd });
+  session.token = data.access_token;
+  session.user = data.user;
+  localStorage.setItem("appstore_token", session.token);
+  return data;
+}
+
 export function logout() {
   session.token = "";
   session.user = null;
@@ -97,6 +108,54 @@ export async function fetchAppStoreVersion() {
 
 export async function fetchStoreAppDetail(appId) {
   return request(`/store/apps/${encodeURIComponent(appId)}`, { auth: true });
+}
+
+export async function changePassword(currentPassword, newPassword) {
+  const fd = new FormData();
+  fd.append("current_password", currentPassword);
+  fd.append("new_password", newPassword);
+  return request("/dev/auth/change-password", { method: "POST", body: fd, auth: true });
+}
+
+export async function fetchUsers() {
+  return request("/dev/users", { auth: true });
+}
+
+export async function resetUserPassword(userId, newPassword) {
+  const fd = new FormData();
+  fd.append("new_password", newPassword);
+  return request(`/dev/auth/users/${encodeURIComponent(userId)}/reset-password`, {
+    method: "POST",
+    body: fd,
+    auth: true,
+  });
+}
+
+export async function fetchAppMembers(appId) {
+  return request(`/dev/apps/${encodeURIComponent(appId)}/members`, { auth: true });
+}
+
+export async function addAppMember(appId, username) {
+  const fd = new FormData();
+  fd.append("username", username);
+  return request(`/dev/apps/${encodeURIComponent(appId)}/members`, { method: "POST", body: fd, auth: true });
+}
+
+export async function removeAppMember(appId, userId) {
+  return request(`/dev/apps/${encodeURIComponent(appId)}/members/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+    auth: true,
+  });
+}
+
+export async function transferAppAdmin(appId, userId) {
+  const fd = new FormData();
+  fd.append("user_id", String(userId));
+  return request(`/dev/apps/${encodeURIComponent(appId)}/transfer-admin`, {
+    method: "POST",
+    body: fd,
+    auth: true,
+  });
 }
 
 export async function fetchStoreDownloadUrl(appId, version) {

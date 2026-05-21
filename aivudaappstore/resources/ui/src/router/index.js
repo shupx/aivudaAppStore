@@ -3,6 +3,7 @@ import LoginView from "../views/LoginView.vue";
 import StoreView from "../views/StoreView.vue";
 import AppDetailView from "../views/AppDetailView.vue";
 import NewAppView from "../views/NewAppView.vue";
+import AccountView from "../views/AccountView.vue";
 import { session } from "../services/api";
 
 const router = createRouter({
@@ -13,6 +14,7 @@ const router = createRouter({
     { path: "/store", component: StoreView, meta: { requiresAuth: true } },
     { path: "/apps/:appId", component: AppDetailView, meta: { requiresAuth: true } },
     { path: "/me/new", component: NewAppView, meta: { requiresAuth: true } },
+    { path: "/me/account", component: AccountView, meta: { requiresAuth: true } },
   ],
 });
 

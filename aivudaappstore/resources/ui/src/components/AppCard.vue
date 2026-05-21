@@ -1,13 +1,14 @@
 <script setup>
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { Download, Trash2, Loader2 } from "lucide-vue-next";
+import { Download, Trash2, Loader2, ShieldCheck } from "lucide-vue-next";
 import { formatDate } from "../utils/format";
 
 const props = defineProps({
   title: { type: String, required: true },
   subtitle: { type: String, default: "" },
   description: { type: String, default: "" },
+  ownerUsername: { type: String, default: "" },
   createdAt: { type: Number, default: 0 },
   updatedAt: { type: Number, default: 0 },
   downloading: { type: Boolean, default: false },
@@ -42,6 +43,11 @@ const updatedAtText = computed(() => formatDate(props.updatedAt));
     <div class="mt-4 flex flex-col gap-1 text-xs text-zinc-500 dark:text-zinc-400">
       <span>{{ t("card.createdAt") }} {{ createdAtText }}</span>
       <span>{{ t("card.updatedAt") }} {{ updatedAtText }}</span>
+    </div>
+
+    <div class="absolute left-4 bottom-4 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+      <ShieldCheck class="w-3.5 h-3.5 text-amber-500" />
+      <span v-if="ownerUsername">{{ ownerUsername }}</span>
     </div>
 
     <div class="absolute right-4 bottom-4 flex items-center gap-2">

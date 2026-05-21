@@ -179,11 +179,14 @@ onBeforeUnmount(() => {
           <button class="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors" @click="go('/me/new')">
             <Upload class="w-4 h-4" /> {{ t('common.uploadNewApp') }}
           </button>
+          <button class="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors" @click="go('/me/account')">
+            <User class="w-4 h-4" /> {{ t('common.accountSettings') }}
+          </button>
           <button class="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors disabled:opacity-50" :disabled="exporting" @click="startExport">
-            <Download class="w-4 h-4" /> {{ exporting ? t("dataPortability.exporting") : t("dataPortability.exportAction") }}
+            <FileUp class="w-4 h-4" /> {{ exporting ? t("dataPortability.exporting") : t("dataPortability.exportAction") }}
           </button>
           <button class="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors" @click="startImport">
-            <FileUp class="w-4 h-4" /> {{ t("dataPortability.importAction") }}
+            <Download class="w-4 h-4" /> {{ t("dataPortability.importAction") }}
           </button>
           <button class="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300 transition-colors mt-1" @click="doLogout">
             <LogOut class="w-4 h-4" /> {{ t('common.logout') }}

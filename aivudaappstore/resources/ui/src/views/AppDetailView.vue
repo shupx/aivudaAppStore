@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import AppTopBar from "../components/AppTopBar.vue";
 import { useAppDetailPage } from "../composables/useAppDetailPage";
 import { formatSize, formatDate } from "../utils/format";
-import { Loader2, UploadCloud, Edit3, Trash2, Download, EyeOff, RefreshCw, FileText, Code, ArrowUp, ArrowDown, Calendar, Clock } from "lucide-vue-next";
+import { Loader2, UploadCloud, Edit3, Trash2, Download, EyeOff, RefreshCw, FileText, Code, ArrowUp, ArrowDown, Calendar, Clock, Users, ShieldCheck, MoreHorizontal } from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
@@ -36,8 +36,17 @@ const {
   editManifestFoundPath,
   confirmDialog,
   appInfo,
+  appPermissions,
+  members,
   versions,
   isOwnerOrAdmin,
+  canManageMembers,
+  memberUsername,
+  memberBusy,
+  memberMenuUserId,
+  showUserDropdown,
+  selectableUsers,
+  loadingUsers,
   sortBy,
   sortAsc,
   sortedVersions,
@@ -51,6 +60,14 @@ const {
   confirmUnpublish,
   confirmDelete,
   handlePublish,
+  addDeveloper,
+  openUserDropdown,
+  closeUserDropdown,
+  chooseUser,
+  toggleMemberMenu,
+  closeMemberMenu,
+  removeDeveloper,
+  makeAdmin,
   onFileChange,
 } = useAppDetailPage({
   appId,
@@ -80,6 +97,97 @@ const {
       >
         <UploadCloud class="w-4 h-4" /> {{ t("detail.uploadVersion") }}
       </button>
+    </section>
+
+    <section class="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-700/60 shadow-xl shadow-zinc-200 dark:shadow-2xl dark:shadow-black/50 rounded-3xl p-6 md:p-8">
+      <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+          <h3 class="text-xl font-bold text-zinc-900 dark:text-zinc-100 m-0 flex items-center gap-2">
+            <Users class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            {{ t("detail.membersTitle") }}
+          </h3>
+          <p class="text-sm text-zinc-500 dark:text-zinc-400 m-0 mt-2">
+            {{ t("detail.yourRole", { role: appPermissions.app_role || (appPermissions.is_global_admin ? 'admin' : t('detail.nonMember')) }) }}
+          </p>
+        </div>
+        <form v-if="canManageMembers" class="flex flex-col sm:flex-row gap-3" @submit.prevent="addDeveloper">
+          <div class="relative">
+            <input
+              v-model="memberUsername"
+              :placeholder="t('detail.memberUsernamePlaceholder')"
+              class="bg-white dark:bg-zinc-950/50 border border-zinc-300 dark:border-zinc-700 rounded-xl px-4 py-2 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all shadow-sm min-w-[220px]"
+              @focus="openUserDropdown"
+              @blur="closeUserDropdown"
+            />
+            <div
+              v-if="showUserDropdown"
+              class="absolute top-[52px] left-0 z-20 w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white/95 shadow-xl backdrop-blur dark:border-zinc-700/60 dark:bg-zinc-900/95"
+            >
+              <div class="max-h-60 overflow-y-auto p-2">
+                <button
+                  v-for="user in selectableUsers"
+                  :key="user.id"
+                  type="button"
+                  class="block w-full rounded-xl px-3 py-2 text-left text-sm text-zinc-700 transition-colors hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  @mousedown.prevent="chooseUser(user.username)"
+                >
+                  {{ user.username }}
+                </button>
+                <div v-if="!loadingUsers && selectableUsers.length === 0" class="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
+                  {{ t("detail.noSelectableUsers") }}
+                </div>
+              </div>
+            </div>
+          </div>
+          <button type="submit" :disabled="memberBusy" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold transition-colors disabled:opacity-50">
+            {{ t("detail.addDeveloper") }}
+          </button>
+        </form>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <article v-for="member in members" :key="member.user_id" class="relative border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-4 bg-zinc-50 dark:bg-zinc-950/40 min-h-[112px]">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{{ member.username }}</div>
+              <div class="text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-2 mt-2">
+                <ShieldCheck v-if="member.app_role === 'admin'" class="w-4 h-4 text-amber-500 shrink-0" />
+                <span>{{ member.app_role === 'admin' ? t("detail.roleAdmin") : t("detail.roleDeveloper") }}</span>
+              </div>
+            </div>
+
+            <div v-if="canManageMembers && member.app_role !== 'admin'" class="relative shrink-0">
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-200 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                :disabled="memberBusy"
+                @click.stop="toggleMemberMenu(member.user_id)"
+              >
+                <MoreHorizontal class="w-4 h-4" />
+              </button>
+              <div
+                v-if="memberMenuUserId === member.user_id"
+                class="absolute right-0 top-10 z-20 min-w-[160px] rounded-xl border border-zinc-200 bg-white/95 p-2 shadow-xl dark:border-zinc-700/60 dark:bg-zinc-900/95"
+              >
+                <button
+                  type="button"
+                  class="block w-full rounded-lg px-3 py-2 text-left text-sm text-amber-700 transition-colors hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                  @click="closeMemberMenu(); makeAdmin(member)"
+                >
+                  {{ t("detail.transferAdmin") }}
+                </button>
+                <button
+                  type="button"
+                  class="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-700 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10"
+                  @click="closeMemberMenu(); removeDeveloper(member)"
+                >
+                  {{ t("detail.removeDeveloper") }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </article>
+      </div>
     </section>
 
     <section class="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border border-zinc-200 dark:border-zinc-700/60 shadow-xl shadow-zinc-200 dark:shadow-2xl dark:shadow-black/50 rounded-3xl p-6 md:p-8">

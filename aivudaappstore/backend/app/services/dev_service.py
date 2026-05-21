@@ -14,7 +14,25 @@ from fastapi import HTTPException, UploadFile
 import yaml
 
 from aivudaappstore.backend.app.core.settings import APPSTORE_API_PREFIX, FILES_DIR, TMP_DIR
-from aivudaappstore.backend.app.services.db import create_audit_log, db_conn, get_app_owned, get_version_owned
+from aivudaappstore.backend.app.services.db import (
+    APP_MANAGE_MEMBER_ROLES,
+    APP_ROLE_ADMIN,
+    APP_ROLE_DEVELOPER,
+    APP_WRITE_ROLES,
+    create_audit_log,
+    db_conn,
+    ensure_app_admin_member,
+    get_app_member_role,
+    get_app_members,
+    get_app_row,
+    get_user_by_id,
+    get_user_by_username,
+    get_version_owned,
+    require_app_role,
+    serialize_member,
+    upsert_app_member,
+    delete_app_member,
+)
 from aivudaappstore.backend.app.services.utils import file_sha256, now_ts
 
 
@@ -660,6 +678,7 @@ async def upload_package(
                 (app_id_text, user["user_id"], name_text, description_text, ts, ts),
             )
             app_pk = cur.lastrowid
+            ensure_app_admin_member(conn, app_pk=app_pk, user_id=int(user["user_id"]), ts=ts)
             create_audit_log(
                 conn,
                 app_id=app_pk,
@@ -743,7 +762,7 @@ async def upload_version(
 
     try:
         with db_conn() as conn:
-            app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
+            app_row = require_app_role(conn, app_id_text=app_id_text, user=user, allowed_roles=APP_WRITE_ROLES)
             app_pk = app_row["id"]
 
             expected_name = str(app_row["name"] or "").strip()
@@ -850,7 +869,7 @@ async def modify_version(
             description_text = manifest_desc
 
     with db_conn() as conn:
-        app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=user, allowed_roles=APP_WRITE_ROLES)
         app_pk = app_row["id"]
         version_row = get_version_owned(conn, app_row=app_row, version=version)
         version_id = version_row["id"]
@@ -932,7 +951,7 @@ def unpublish_version(
 ) -> Dict[str, Any]:
     """Soft delist: set version status to 'unpublished'."""
     with db_conn() as conn:
-        app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=user, allowed_roles=APP_WRITE_ROLES)
         version_row = get_version_owned(conn, app_row=app_row, version=version)
 
         if version_row["status"] == "unpublished":
@@ -970,7 +989,7 @@ def publish_version(
 ) -> Dict[str, Any]:
     """Re-publish a previously unpublished version."""
     with db_conn() as conn:
-        app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=user, allowed_roles=APP_WRITE_ROLES)
         version_row = get_version_owned(conn, app_row=app_row, version=version)
 
         if version_row["status"] == "published":
@@ -1010,7 +1029,7 @@ def delete_version(
 ) -> Dict[str, Any]:
     """Hard delete: remove DB records and files for a version."""
     with db_conn() as conn:
-        app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=user, allowed_roles=APP_WRITE_ROLES)
         version_row = get_version_owned(conn, app_row=app_row, version=version)
         version_id = version_row["id"]
         app_pk = app_row["id"]
@@ -1051,7 +1070,7 @@ def delete_app(
 ) -> Dict[str, Any]:
     """Hard delete: remove an entire app including all versions, targets, and files."""
     with db_conn() as conn:
-        app_row = get_app_owned(conn, app_id_text=app_id_text, user=user)
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=user, allowed_roles=APP_MANAGE_MEMBER_ROLES)
         app_pk = app_row["id"]
 
         create_audit_log(
@@ -1072,3 +1091,115 @@ def delete_app(
         shutil.rmtree(app_dir, ignore_errors=True)
 
     return {"ok": True, "app_id": app_id_text}
+
+
+def list_app_members(
+    *,
+    user: Dict[str, Any],
+    app_id_text: str,
+) -> Dict[str, Any]:
+    with db_conn() as conn:
+        app_row = get_app_row(conn, app_id_text=app_id_text)
+        if user["role"] != "admin":
+            member_role = get_app_member_role(conn, app_pk=app_row["id"], user_id=int(user["user_id"]))
+            if member_role is None:
+                raise HTTPException(status_code=403, detail="Permission denied for this app")
+        members = [serialize_member(row) for row in get_app_members(conn, app_pk=app_row["id"])]
+    return {"ok": True, "app_id": app_id_text, "members": members}
+
+
+def add_app_developer(
+    *,
+    actor: Dict[str, Any],
+    app_id_text: str,
+    username: str,
+) -> Dict[str, Any]:
+    username_value = str(username or "").strip()
+    if not username_value:
+        raise HTTPException(status_code=400, detail="username is required")
+    with db_conn() as conn:
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=actor, allowed_roles=APP_MANAGE_MEMBER_ROLES)
+        target_user = get_user_by_username(conn, username_value)
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if int(target_user["id"]) == int(app_row["owner_user_id"]):
+            raise HTTPException(status_code=400, detail="App admin already has full access")
+        upsert_app_member(
+            conn,
+            app_pk=app_row["id"],
+            user_id=int(target_user["id"]),
+            role=APP_ROLE_DEVELOPER,
+        )
+        create_audit_log(
+            conn,
+            app_id=app_row["id"],
+            actor_user_id=actor["user_id"],
+            action="add_app_developer",
+            detail={"username": target_user["username"], "user_id": target_user["id"]},
+        )
+        conn.commit()
+        members = [serialize_member(row) for row in get_app_members(conn, app_pk=app_row["id"])]
+    return {"ok": True, "app_id": app_id_text, "members": members}
+
+
+def remove_app_developer(
+    *,
+    actor: Dict[str, Any],
+    app_id_text: str,
+    target_user_id: int,
+) -> Dict[str, Any]:
+    with db_conn() as conn:
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=actor, allowed_roles=APP_MANAGE_MEMBER_ROLES)
+        target_user = get_user_by_id(conn, int(target_user_id))
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if int(target_user_id) == int(app_row["owner_user_id"]):
+            raise HTTPException(status_code=400, detail="Cannot remove the current app admin")
+        role = get_app_member_role(conn, app_pk=app_row["id"], user_id=int(target_user_id))
+        if role is None:
+            raise HTTPException(status_code=404, detail="User is not a member of this app")
+        delete_app_member(conn, app_pk=app_row["id"], user_id=int(target_user_id))
+        create_audit_log(
+            conn,
+            app_id=app_row["id"],
+            actor_user_id=actor["user_id"],
+            action="remove_app_developer",
+            detail={"username": target_user["username"], "user_id": target_user_id},
+        )
+        conn.commit()
+        members = [serialize_member(row) for row in get_app_members(conn, app_pk=app_row["id"])]
+    return {"ok": True, "app_id": app_id_text, "members": members}
+
+
+def transfer_app_admin(
+    *,
+    actor: Dict[str, Any],
+    app_id_text: str,
+    target_user_id: int,
+) -> Dict[str, Any]:
+    with db_conn() as conn:
+        app_row = require_app_role(conn, app_id_text=app_id_text, user=actor, allowed_roles=APP_MANAGE_MEMBER_ROLES)
+        target_user = get_user_by_id(conn, int(target_user_id))
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        ts = now_ts()
+        previous_owner_id = int(app_row["owner_user_id"])
+        ensure_app_admin_member(conn, app_pk=app_row["id"], user_id=int(target_user_id), ts=ts)
+        if previous_owner_id != int(target_user_id):
+            upsert_app_member(
+                conn,
+                app_pk=app_row["id"],
+                user_id=previous_owner_id,
+                role=APP_ROLE_DEVELOPER,
+                ts=ts,
+            )
+        create_audit_log(
+            conn,
+            app_id=app_row["id"],
+            actor_user_id=actor["user_id"],
+            action="transfer_app_admin",
+            detail={"from_user_id": previous_owner_id, "to_user_id": target_user_id},
+        )
+        conn.commit()
+        members = [serialize_member(row) for row in get_app_members(conn, app_pk=app_row["id"])]
+    return {"ok": True, "app_id": app_id_text, "members": members}

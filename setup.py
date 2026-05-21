@@ -13,7 +13,7 @@ from setuptools.command.sdist import sdist as _sdist
 
 ROOT = Path(__file__).resolve().parent
 SOURCE_ROOT = ROOT
-BASE_VERSION = "0.1.0"
+BASE_VERSION = "1.0.0"
 PACKAGED_UI_PATH = SOURCE_ROOT / "aivudaappstore" / "resources" / "ui"
 SDIST_EXCLUDED_PATHS = (
     Path("aivudaappstore/resources/ui/node_modules"),

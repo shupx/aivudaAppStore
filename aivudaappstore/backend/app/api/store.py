@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 from fastapi.responses import FileResponse
 from starlette.responses import Response
 
 from aivudaappstore import __version__
+from aivudaappstore.backend.app.services.auth import require_user
 from aivudaappstore.backend.app.services.store_service import (
     store_app_detail as service_store_app_detail,
     store_caddy_local_ca_root as service_store_caddy_local_ca_root,
@@ -41,8 +42,11 @@ async def store_caddy_local_ca_root() -> FileResponse:
 
 
 @router.get("/apps/{app_id}")
-async def store_app_detail(app_id: str) -> Dict[str, Any]:
-    return service_store_app_detail(app_id)
+async def store_app_detail(app_id: str, authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    current_user = None
+    if authorization:
+        current_user = require_user(authorization)
+    return service_store_app_detail(app_id, current_user=current_user)
 
 
 @router.get("/apps/{app_id}/versions/{version}/manifest")

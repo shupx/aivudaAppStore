@@ -4,7 +4,7 @@ import { useAppDownload } from "./useAppDownload";
 import { useVersionSort } from "./useVersionSort";
 import { applyNormalizedManifest, buildRequiredManifestFromForm, createManifestForm } from "../utils/manifest";
 import { buildUbuntuTreeLines, sortPackageEntriesByDirectory } from "../utils/packageTree";
-import { session } from "../services/api";
+import { addAppMember, fetchUsers, removeAppMember, session, transferAppAdmin } from "../services/api";
 
 export function useAppDetailPage({ appId, t, onAuthFail }) {
   const {
@@ -57,10 +57,25 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
   const editHasPackageSelected = computed(() => Boolean(editFile.value));
 
   const appInfo = computed(() => detail.value?.app || null);
+  const appPermissions = computed(() => detail.value?.permissions || {});
+  const members = computed(() => detail.value?.members || []);
   const versions = computed(() => detail.value?.versions || []);
-  const isOwnerOrAdmin = computed(() => {
-    if (!appInfo.value || !session.user) return false;
-    return session.user.role === "admin" || session.user.id === appInfo.value.owner_user_id;
+  const isOwnerOrAdmin = computed(() => !!appPermissions.value?.can_edit_versions);
+  const canManageMembers = computed(() => !!appPermissions.value?.can_manage_members);
+  const memberUsername = ref("");
+  const memberBusy = ref(false);
+  const memberMenuUserId = ref(null);
+  const showUserDropdown = ref(false);
+  const availableUsers = ref([]);
+  const loadingUsers = ref(false);
+  const selectableUsers = computed(() => {
+    const currentMembers = new Set(members.value.map((member) => member.username));
+    const keyword = memberUsername.value.trim().toLowerCase();
+    return availableUsers.value.filter((user) => {
+      if (currentMembers.has(user.username)) return false;
+      if (!keyword) return true;
+      return user.username.toLowerCase().includes(keyword);
+    });
   });
 
   const { sortBy, sortAsc, sortedVersions } = useVersionSort(versions);
@@ -228,6 +243,83 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
     }
   }
 
+  async function addDeveloper() {
+    if (!memberUsername.value.trim()) return;
+    memberBusy.value = true;
+    try {
+      await addAppMember(appId, memberUsername.value.trim());
+      memberUsername.value = "";
+      await load();
+    } catch (err) {
+      window.alert(String(err));
+    } finally {
+      memberBusy.value = false;
+    }
+  }
+
+  async function removeDeveloper(member) {
+    const confirmed = window.confirm(t("detail.confirmRemoveDeveloper", { username: member.username }));
+    if (!confirmed) return;
+    memberBusy.value = true;
+    try {
+      await removeAppMember(appId, member.user_id);
+      await load();
+    } catch (err) {
+      window.alert(String(err));
+    } finally {
+      memberBusy.value = false;
+    }
+  }
+
+  async function makeAdmin(member) {
+    const confirmed = window.confirm(t("detail.confirmTransferAdmin", { username: member.username }));
+    if (!confirmed) return;
+    memberBusy.value = true;
+    try {
+      await transferAppAdmin(appId, member.user_id);
+      await load();
+    } catch (err) {
+      window.alert(String(err));
+    } finally {
+      memberBusy.value = false;
+    }
+  }
+
+  function toggleMemberMenu(userId) {
+    memberMenuUserId.value = memberMenuUserId.value === userId ? null : userId;
+  }
+
+  function closeMemberMenu() {
+    memberMenuUserId.value = null;
+  }
+
+  function openUserDropdown() {
+    showUserDropdown.value = true;
+  }
+
+  function closeUserDropdown() {
+    window.setTimeout(() => {
+      showUserDropdown.value = false;
+    }, 120);
+  }
+
+  function chooseUser(username) {
+    memberUsername.value = username;
+    showUserDropdown.value = false;
+  }
+
+  async function loadUsers() {
+    loadingUsers.value = true;
+    try {
+      const data = await fetchUsers();
+      availableUsers.value = data.users || [];
+    } catch (err) {
+      console.warn(err);
+    } finally {
+      loadingUsers.value = false;
+    }
+  }
+
   async function onFileChange(target, event) {
     const file = event.target.files?.[0] || null;
     if (target === "upload") {
@@ -266,6 +358,7 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
 
   onMounted(async () => {
     const result = await load();
+    await loadUsers();
     if (result === null && !detail.value) {
       if (onAuthFail) onAuthFail();
     }
@@ -297,8 +390,17 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
     editManifestFoundPath,
     confirmDialog,
     appInfo,
+    appPermissions,
+    members,
     versions,
     isOwnerOrAdmin,
+    canManageMembers,
+    memberUsername,
+    memberBusy,
+    memberMenuUserId,
+    showUserDropdown,
+    selectableUsers,
+    loadingUsers,
     sortBy,
     sortAsc,
     sortedVersions,
@@ -312,6 +414,14 @@ export function useAppDetailPage({ appId, t, onAuthFail }) {
     confirmUnpublish,
     confirmDelete,
     handlePublish,
+    addDeveloper,
+    openUserDropdown,
+    closeUserDropdown,
+    chooseUser,
+    toggleMemberMenu,
+    closeMemberMenu,
+    removeDeveloper,
+    makeAdmin,
     onFileChange,
   };
 }

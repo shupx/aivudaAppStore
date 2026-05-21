@@ -15,7 +15,7 @@ from aivudaappstore.backend.app.services.db import init_db
 
 def create_app() -> FastAPI:
     ensure_storage_dirs()
-    api = FastAPI(title="Aivuda App Store", version="0.1.0")
+    api = FastAPI(title="Aivuda App Store", version="1.0.0")
 
     public_paths = (
         f"{APPSTORE_API_PREFIX}/store",
