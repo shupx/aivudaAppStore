@@ -107,7 +107,7 @@ const {
             {{ t("detail.membersTitle") }}
           </h3>
           <p class="text-sm text-zinc-500 dark:text-zinc-400 m-0 mt-2">
-            {{ t("detail.yourRole", { role: appPermissions.app_role || (appPermissions.is_global_admin ? 'admin' : t('detail.nonMember')) }) }}
+            {{ t("detail.yourRole", { role: appPermissions.app_role === 'admin' ? t('detail.roleAdmin') : (appPermissions.app_role === 'developer' ? t('detail.roleDeveloper') : (appPermissions.is_global_admin ? t('detail.globalAdmin') : t('detail.nonMember'))) }) }}
           </p>
         </div>
         <form v-if="canManageMembers" class="flex flex-col sm:flex-row gap-3" @submit.prevent="addDeveloper">
@@ -232,8 +232,14 @@ const {
           </div>
 
           <div class="flex flex-wrap gap-x-6 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400 mb-4">
-            <span v-if="ver.published_at" class="flex items-center gap-1.5"><Calendar class="w-3.5 h-3.5" /> {{ t("detail.publishedAt", { time: formatDate(ver.published_at) }) }}</span>
-            <span class="flex items-center gap-1.5"><Clock class="w-3.5 h-3.5" /> {{ t("detail.updatedAt", { time: formatDate(ver.updated_at) }) }}</span>
+            <span v-if="ver.published_at" class="flex items-center gap-1.5">
+              <Calendar class="w-3.5 h-3.5" />
+              {{ t("detail.publishedAtBy", { time: formatDate(ver.published_at), user: ver.published_by || '-' }) }}
+            </span>
+            <span class="flex items-center gap-1.5">
+              <Clock class="w-3.5 h-3.5" />
+              {{ t("detail.updatedAtBy", { time: formatDate(ver.updated_at), user: ver.updated_by || '-' }) }}
+            </span>
           </div>
           
           <div v-if="ver.description" class="text-sm text-zinc-700 dark:text-zinc-300 mb-5 max-w-3xl leading-relaxed">{{ ver.description }}</div>

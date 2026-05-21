@@ -133,12 +133,78 @@ def store_app_detail(app_id: str, current_user: Optional[Dict[str, Any]] = None)
             """,
             (app_row["id"],),
         ).fetchall()
+        version_ids = [row["id"] for row in all_versions]
+        audit_by_version: Dict[int, Dict[str, Optional[str]]] = {}
+        fallback_app_publishers: Dict[str, str] = {}
+        if version_ids:
+            placeholders = ",".join(["?"] * len(version_ids))
+            audit_rows = conn.execute(
+                f"""
+                SELECT
+                    l.version_id,
+                    l.action,
+                    l.created_at,
+                    u.username
+                FROM app_audit_log l
+                JOIN developer_user u ON u.id = l.actor_user_id
+                WHERE l.version_id IN ({placeholders})
+                  AND l.action IN ('upload_version', 'upload_package_publish', 'publish_version', 'modify_version')
+                ORDER BY l.created_at DESC, l.id DESC
+                """,
+                version_ids,
+            ).fetchall()
+            for row in audit_rows:
+                version_id = int(row["version_id"])
+                entry = audit_by_version.setdefault(
+                    version_id,
+                    {
+                        "published_by": None,
+                        "updated_by": None,
+                    },
+                )
+                action = str(row["action"] or "")
+                username = str(row["username"] or "")
+                if action in {"upload_version", "upload_package_publish", "publish_version"} and not entry["published_by"]:
+                    entry["published_by"] = username
+                if action in {"modify_version", "upload_version", "upload_package_publish", "publish_version"} and not entry["updated_by"]:
+                    entry["updated_by"] = username
+
+            fallback_publish_rows = conn.execute(
+                """
+                SELECT
+                    l.action,
+                    l.detail_json,
+                    u.username
+                FROM app_audit_log l
+                JOIN developer_user u ON u.id = l.actor_user_id
+                WHERE l.app_id = ?
+                  AND l.version_id IS NULL
+                  AND l.action IN ('upload_package_publish', 'publish_version')
+                ORDER BY l.created_at DESC, l.id DESC
+                """,
+                (app_row["id"],),
+            ).fetchall()
+            for row in fallback_publish_rows:
+                detail_raw = row["detail_json"]
+                detail: Dict[str, Any] = {}
+                if detail_raw:
+                    try:
+                        parsed = json.loads(detail_raw)
+                        if isinstance(parsed, dict):
+                            detail = parsed
+                    except json.JSONDecodeError:
+                        detail = {}
+                version_text = str(detail.get("version") or "").strip()
+                username = str(row["username"] or "")
+                if version_text and username and version_text not in fallback_app_publishers:
+                    fallback_app_publishers[version_text] = username
 
         # Structured versions array (all versions including unpublished)
         versions = []
         for v_row in all_versions:
             targets = get_targets(conn, version_id=v_row["id"])
             artifact_size = targets[0]["artifact_size"] if targets else 0
+            audit_meta = audit_by_version.get(int(v_row["id"]), {})
             artifact_url = (
                 f"{APPSTORE_API_PREFIX}/store/apps/{app_id}/versions/{v_row['version']}/download"
                 if targets and targets[0]["artifact_relpath"]
@@ -149,8 +215,10 @@ def store_app_detail(app_id: str, current_user: Optional[Dict[str, Any]] = None)
                 "description": v_row["description"],
                 "status": v_row["status"],
                 "published_at": v_row["published_at"],
+                "published_by": audit_meta.get("published_by") or fallback_app_publishers.get(str(v_row["version"] or "").strip()),
                 "created_at": v_row["created_at"],
                 "updated_at": v_row["updated_at"],
+                "updated_by": audit_meta.get("updated_by"),
                 "artifact_size": artifact_size,
                 "artifact_url": artifact_url,
             })

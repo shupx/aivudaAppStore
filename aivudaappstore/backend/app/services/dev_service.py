@@ -712,6 +712,7 @@ async def upload_package(
                 app_id=app_pk,
                 actor_user_id=user["user_id"],
                 action="upload_package_publish",
+                version_id=version_id,
                 detail={"version": version_text},
             )
             conn.commit()
@@ -1203,3 +1204,225 @@ def transfer_app_admin(
         conn.commit()
         members = [serialize_member(row) for row in get_app_members(conn, app_pk=app_row["id"])]
     return {"ok": True, "app_id": app_id_text, "members": members}
+
+
+def list_manageable_apps(
+    *,
+    actor: Dict[str, Any],
+) -> Dict[str, Any]:
+    with db_conn() as conn:
+        if actor["role"] == "admin":
+            rows = conn.execute(
+                """
+                SELECT a.app_id, a.name, a.owner_user_id, u.username AS owner_username
+                FROM app a
+                JOIN developer_user u ON u.id = a.owner_user_id
+                ORDER BY a.name, a.app_id
+                """
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT a.app_id, a.name, a.owner_user_id, u.username AS owner_username
+                FROM app a
+                JOIN developer_user u ON u.id = a.owner_user_id
+                JOIN app_member m ON m.app_id = a.id
+                WHERE m.user_id = ? AND m.role = ?
+                ORDER BY a.name, a.app_id
+                """,
+                (actor["user_id"], APP_ROLE_ADMIN),
+            ).fetchall()
+    return {
+        "ok": True,
+        "apps": [
+            {
+                "app_id": row["app_id"],
+                "name": row["name"],
+                "owner_user_id": row["owner_user_id"],
+                "owner_username": row["owner_username"],
+            }
+            for row in rows
+        ],
+    }
+
+
+def batch_update_app_memberships(
+    *,
+    actor: Dict[str, Any],
+    action: str,
+    target_user_ids: List[int],
+    app_ids: List[str],
+) -> Dict[str, Any]:
+    valid_actions = {"add_developer", "remove_developer", "transfer_admin"}
+    if action not in valid_actions:
+        raise HTTPException(status_code=400, detail="Invalid batch action")
+    if not target_user_ids:
+        raise HTTPException(status_code=400, detail="target_user_ids is required")
+    if not app_ids:
+        raise HTTPException(status_code=400, detail="app_ids is required")
+    if action == "transfer_admin" and len(target_user_ids) != 1:
+        raise HTTPException(status_code=400, detail="transfer_admin requires exactly one target user")
+
+    successes: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+    failures: List[Dict[str, Any]] = []
+
+    with db_conn() as conn:
+        user_map = {
+            int(row["id"]): row
+            for row in [get_user_by_id(conn, int(user_id)) for user_id in target_user_ids]
+            if row is not None
+        }
+        for target_user_id in target_user_ids:
+            if int(target_user_id) not in user_map:
+                failures.append(
+                    {
+                        "app_id": "",
+                        "target_user_id": int(target_user_id),
+                        "message": "User not found",
+                    }
+                )
+
+        for app_id_text in app_ids:
+            try:
+                app_row = require_app_role(
+                    conn,
+                    app_id_text=app_id_text,
+                    user=actor,
+                    allowed_roles=APP_MANAGE_MEMBER_ROLES,
+                )
+            except HTTPException as exc:
+                for target_user_id in target_user_ids:
+                    failures.append(
+                        {
+                            "app_id": app_id_text,
+                            "target_user_id": int(target_user_id),
+                            "message": str(exc.detail),
+                        }
+                    )
+                continue
+
+            if action == "transfer_admin":
+                target_user_id = int(target_user_ids[0])
+                target_user = user_map.get(target_user_id)
+                if not target_user:
+                    continue
+                if target_user_id == int(app_row["owner_user_id"]):
+                    skipped.append(
+                        {
+                            "app_id": app_id_text,
+                            "target_user_id": target_user_id,
+                            "message": "User is already the app admin",
+                        }
+                    )
+                    continue
+                ts = now_ts()
+                previous_owner_id = int(app_row["owner_user_id"])
+                ensure_app_admin_member(conn, app_pk=app_row["id"], user_id=target_user_id, ts=ts)
+                if previous_owner_id != target_user_id:
+                    upsert_app_member(
+                        conn,
+                        app_pk=app_row["id"],
+                        user_id=previous_owner_id,
+                        role=APP_ROLE_DEVELOPER,
+                        ts=ts,
+                    )
+                create_audit_log(
+                    conn,
+                    app_id=app_row["id"],
+                    actor_user_id=actor["user_id"],
+                    action="batch_transfer_app_admin",
+                    detail={"from_user_id": previous_owner_id, "to_user_id": target_user_id},
+                )
+                successes.append(
+                    {
+                        "app_id": app_id_text,
+                        "target_user_id": target_user_id,
+                        "message": "Admin transferred",
+                    }
+                )
+                continue
+
+            for target_user_id in target_user_ids:
+                target_user_id = int(target_user_id)
+                target_user = user_map.get(target_user_id)
+                if not target_user:
+                    continue
+
+                if target_user_id == int(app_row["owner_user_id"]):
+                    skipped.append(
+                        {
+                            "app_id": app_id_text,
+                            "target_user_id": target_user_id,
+                            "message": "Cannot change the current app admin with this action",
+                        }
+                    )
+                    continue
+
+                existing_role = get_app_member_role(conn, app_pk=app_row["id"], user_id=target_user_id)
+                if action == "add_developer":
+                    if existing_role == APP_ROLE_DEVELOPER:
+                        skipped.append(
+                            {
+                                "app_id": app_id_text,
+                                "target_user_id": target_user_id,
+                                "message": "User is already a developer",
+                            }
+                        )
+                        continue
+                    upsert_app_member(
+                        conn,
+                        app_pk=app_row["id"],
+                        user_id=target_user_id,
+                        role=APP_ROLE_DEVELOPER,
+                    )
+                    create_audit_log(
+                        conn,
+                        app_id=app_row["id"],
+                        actor_user_id=actor["user_id"],
+                        action="batch_add_app_developer",
+                        detail={"user_id": target_user_id, "username": target_user["username"]},
+                    )
+                    successes.append(
+                        {
+                            "app_id": app_id_text,
+                            "target_user_id": target_user_id,
+                            "message": "Developer added",
+                        }
+                    )
+                    continue
+
+                if existing_role is None:
+                    skipped.append(
+                        {
+                            "app_id": app_id_text,
+                            "target_user_id": target_user_id,
+                            "message": "User is not a member of this app",
+                        }
+                    )
+                    continue
+                delete_app_member(conn, app_pk=app_row["id"], user_id=target_user_id)
+                create_audit_log(
+                    conn,
+                    app_id=app_row["id"],
+                    actor_user_id=actor["user_id"],
+                    action="batch_remove_app_developer",
+                    detail={"user_id": target_user_id, "username": target_user["username"]},
+                )
+                successes.append(
+                    {
+                        "app_id": app_id_text,
+                        "target_user_id": target_user_id,
+                        "message": "Developer removed",
+                    }
+                )
+
+        conn.commit()
+
+    return {
+        "ok": True,
+        "action": action,
+        "successes": successes,
+        "skipped": skipped,
+        "failures": failures,
+    }

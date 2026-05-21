@@ -135,6 +135,18 @@ export async function fetchAppMembers(appId) {
   return request(`/dev/apps/${encodeURIComponent(appId)}/members`, { auth: true });
 }
 
+export async function fetchManageableApps() {
+  return request("/dev/apps/manageable", { auth: true });
+}
+
+export async function batchUpdateAppMemberships(payload) {
+  const fd = new FormData();
+  fd.append("action", payload.action);
+  fd.append("target_user_ids", JSON.stringify(payload.target_user_ids || []));
+  fd.append("app_ids", JSON.stringify(payload.app_ids || []));
+  return request("/dev/apps/memberships/batch", { method: "POST", body: fd, auth: true });
+}
+
 export async function addAppMember(appId, username) {
   const fd = new FormData();
   fd.append("username", username);

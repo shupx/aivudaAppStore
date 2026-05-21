@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, File, Form, Header, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
 
 from aivudaappstore.backend.app.services.auth import (
     change_password,
@@ -20,9 +20,11 @@ from aivudaappstore.backend.app.services.data_portability import (
 )
 from aivudaappstore.backend.app.services.dev_service import (
     add_app_developer,
+    batch_update_app_memberships,
     delete_app,
     delete_version,
     list_app_members,
+    list_manageable_apps,
     modify_version,
     parse_package_manifest,
     publish_version,
@@ -235,6 +237,14 @@ async def dev_list_app_members(
     return list_app_members(user=user, app_id_text=app_id)
 
 
+@router.get("/apps/manageable")
+async def dev_list_manageable_apps(
+    authorization: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    actor = require_user(authorization)
+    return list_manageable_apps(actor=actor)
+
+
 @router.post("/apps/{app_id}/members")
 async def dev_add_app_member(
     app_id: str,
@@ -263,3 +273,28 @@ async def dev_transfer_app_admin(
 ) -> Dict[str, Any]:
     actor = require_user(authorization)
     return transfer_app_admin(actor=actor, app_id_text=app_id, target_user_id=user_id)
+
+
+@router.post("/apps/memberships/batch")
+async def dev_batch_update_app_memberships(
+    action: str = Form(...),
+    target_user_ids: str = Form(...),
+    app_ids: str = Form(...),
+    authorization: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    import json
+
+    actor = require_user(authorization)
+    try:
+        target_user_id_list = json.loads(target_user_ids)
+        app_id_list = json.loads(app_ids)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail="target_user_ids and app_ids must be valid JSON arrays") from exc
+    if not isinstance(target_user_id_list, list) or not isinstance(app_id_list, list):
+        raise HTTPException(status_code=400, detail="target_user_ids and app_ids must be arrays")
+    return batch_update_app_memberships(
+        actor=actor,
+        action=action,
+        target_user_ids=[int(item) for item in target_user_id_list],
+        app_ids=[str(item) for item in app_id_list],
+    )
