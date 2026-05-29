@@ -138,15 +138,35 @@ ensure_user_linger_enabled() {
   sudo loginctl enable-linger "${USER}"
 }
 
+ensure_caddy_installed() {
+  local caddy_source=""
+
+  if [[ -x "${CADDY_BIN}" ]]; then
+    return
+  fi
+
+  echo -e "\e[33mCaddy binary not found or not executable: ${CADDY_BIN}\e[0m" >&2
+  if [[ -t 0 ]]; then
+    echo ""
+    echo "Optional: provide a Caddy source (local binary/archive path or URL)."
+    read -e -r -p "Press Enter to use default source: " caddy_source
+  else
+    echo "Non-interactive shell detected, using default Caddy source."
+  fi
+
+  if [[ -n "${caddy_source}" ]]; then
+    "${DOWNLOAD_CADDY_HELPER}" --source "${caddy_source}" --output "${CADDY_BIN}"
+  else
+    "${DOWNLOAD_CADDY_HELPER}" --output "${CADDY_BIN}"
+  fi
+}
+
 mkdir -p "${USER_SYSTEMD_DIR}" "${RUNTIME_ROOT}/config" "${RUNTIME_ROOT}/data/files/apps" "${RUNTIME_ROOT}/samples"
 
 resolve_python_bin
 ensure_https_hosts
 ensure_user_linger_enabled
-
-if [[ ! -x "${CADDY_BIN}" ]]; then
-  "${DOWNLOAD_CADDY_HELPER}" --output "${CADDY_BIN}"
-fi
+ensure_caddy_installed
 
 if [[ ! -d "${FRONTEND_DIST}" ]]; then
   echo "Frontend dist not found: ${FRONTEND_DIST}" >&2
