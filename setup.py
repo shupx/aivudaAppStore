@@ -136,7 +136,7 @@ setup(
     packages=find_packages(where=".", include=["aivudaappstore", "aivudaappstore.*"]),
     include_package_data=True,
     install_requires=read_requirements(),
-    entry_points={"console_scripts": ["aivudaappstore=aivudaappstore.cli:main"]},
+    entry_points={"console_scripts": ["aivudaappstore=aivudaappstore.cli:main", "aivudaappstore-mcp=aivudaappstore.mcp_server:main"]},
     cmdclass={"build_py": build_py, "sdist": sdist},
     package_data={"aivudaappstore": ["resources/*", "resources/**/*"]},
 )

@@ -100,3 +100,20 @@ CI 流程包含：
   - 或非交互方式：`aivudaappstore reset-admin-password --password NEW_PASSWORD`
 
 ## 更多架构细节
+
+## 独立 MCP 服务
+
+AppStore 提供不依赖 ACEswarm 的 stdlib JSON-RPC MCP stdio 服务：
+
+```bash
+python3 -m aivudaappstore.mcp_server
+# 或安装后：aivudaappstore-mcp
+```
+
+服务使用逐行 JSON-RPC 2.0。设置 `AIVUDAAPPSTORE_MCP_BASE_URL`（默认
+`http://127.0.0.1:8000/aivuda_app_store`）；公开工具为 `store_index`、
+`store_app_detail` 和 `store_download_metadata`。`developer_manageable_apps`
+仅在设置 `AIVUDAAPPSTORE_MCP_TOKEN` 时启用，并将 token 作为 Bearer token
+转发给 AppStore 的认证 API。MCP 只调用本包公共 HTTP API，不访问数据库，
+不下载包内容，也不暴露发布、删除、上传或成员管理等写操作。
+
