@@ -1,0 +1,16 @@
+robot:
+  motion:
+    max_speed_mps: 1.25
+    planner:
+      mode: safe
+      retries: 3
+  sensors:
+    camera:
+      enabled: true
+      fps: 30
+mission:
+  profile:
+    name: demo-route
+    waypoints:
+      - [0.0, 0.0, 1.2]
+      - [2.1, 1.3, 1.2]

@@ -1,0 +1,15 @@
+app_id: app_helloworld_20260302_3a2d # manatory, must be unique across all app pkgs, can be replaced by the auto generation logic in the App Store.
+name: Hello World Examle # manatory, can be duplicated across app pkgs
+description: Sample app package for aivudaOS-compatible manifest flow. # manatory 
+version: 0.1.0  # manatory, should follow semver format(0.1.0, 0.1.0-alpha, etc.)
+run:
+  entrypoint: start.sh # manatory, relative path to this folder
+  args: []
+icon: assets/icon.png  # optional, relative path to this folder
+pre_install: scripts/pre_install.sh # optional, relative path to this folder
+pre_uninstall: scripts/pre_uninstall.sh # optional, relative path to this folder
+update_this_version: scripts/update_this_version.sh # optional, relative path to this folder
+ui_index_path: ui/index.html # optional, relative path to this folder
+# caddyfile_config_path: ./config/caddy/helloworld.caddy # optional, relative path to this folder
+default_config_path: config/default_config.yaml # optional, relative path to this folder
+config_schema_path: config/config_schema.yaml # optional, relative path to this folder

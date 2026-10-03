@@ -1,0 +1,67 @@
+type: object
+properties:
+  robot:
+    type: object
+    properties:
+      motion:
+        type: object
+        properties:
+          max_speed_mps:
+            type: number
+            need_restart: true
+          planner:
+            type: object
+            properties:
+              mode:
+                type: string
+                enum: [safe, fast]
+                need_restart: true
+              retries:
+                type: integer
+                need_restart: true
+            required: [mode, retries]
+            additionalProperties: false
+        required: [max_speed_mps, planner]
+        additionalProperties: false
+      sensors:
+        type: object
+        properties:
+          camera:
+            type: object
+            properties:
+              enabled:
+                type: boolean
+                need_restart: true
+              fps:
+                type: integer
+                need_restart: true
+            required: [enabled, fps]
+            additionalProperties: false
+        required: [camera]
+        additionalProperties: false
+    required: [motion, sensors]
+    additionalProperties: false
+  mission:
+    type: object
+    properties:
+      profile:
+        type: object
+        properties:
+          name:
+            type: string
+            need_restart: true
+          waypoints:
+            type: array
+            need_restart: true
+            items:
+              type: array
+              items:
+                type: number
+        required: [name, waypoints]
+        additionalProperties: false
+    required: [profile]
+    additionalProperties: false
+required:
+  - robot
+  - mission
+additionalProperties: false
