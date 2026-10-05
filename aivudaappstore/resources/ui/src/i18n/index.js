@@ -1,11 +1,14 @@
 import { createI18n } from "vue-i18n";
+import { ref } from "vue";
+import { readSetting, saveSetting, resolveLanguage, subscribeAppearance } from "../appearance";
 
-const DEFAULT_LOCALE = localStorage.getItem("appstore_locale") || "zh-CN";
+export const localeMode = ref(readSetting("appstore_locale"));
+const DEFAULT_LOCALE = resolveLanguage(localeMode.value);
 
 export const i18n = createI18n({
   legacy: false,
   locale: DEFAULT_LOCALE,
-  fallbackLocale: "zh-CN",
+  fallbackLocale: "en-US",
   messages: {},
 });
 
@@ -14,18 +17,31 @@ export async function loadLocaleMessages(locale) {
     "zh-CN": () => import("./locales/zh-CN.json"),
     "en-US": () => import("./locales/en-US.json"),
   };
-  const loader = loaders[locale] || loaders["zh-CN"];
+  const loader = loaders[locale] || loaders["en-US"];
   const mod = await loader();
   i18n.global.setLocaleMessage(locale, mod.default);
 }
 
-export async function setLocale(locale) {
+let languageRevision = 0;
+async function applyLocale() {
+  const revision = ++languageRevision;
+  const locale = resolveLanguage(localeMode.value);
   if (!i18n.global.availableLocales.includes(locale)) {
     await loadLocaleMessages(locale);
   }
-  i18n.global.locale.value = locale;
-  localStorage.setItem("appstore_locale", locale);
+  if (revision === languageRevision) i18n.global.locale.value = locale;
 }
+
+export async function setLocale(mode) {
+  localeMode.value = ['system', 'en-US', 'zh-CN'].includes(mode) ? mode : 'system';
+  saveSetting("appstore_locale", localeMode.value);
+  await applyLocale();
+}
+
+subscribeAppearance(() => {
+  localeMode.value = readSetting("appstore_locale");
+  applyLocale().catch(error => console.warn('Language update failed:', error));
+});
 
 export function currentLocale() {
   return i18n.global.locale.value;

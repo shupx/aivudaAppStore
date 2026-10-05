@@ -3,10 +3,10 @@ import { onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { logout, session } from "../services/api";
-import { setLocale } from "../i18n";
+import { setLocale, localeMode } from "../i18n";
 import { useDataPortability } from "../composables/useDataPortability";
 import { formatSize } from "../utils/format";
-import { ArrowLeft, ShoppingBag, User, LogOut, Upload, Download, FileUp, Languages, Loader2, Moon, Sun } from "lucide-vue-next";
+import { ArrowLeft, ShoppingBag, User, LogOut, Upload, Download, FileUp, Loader2, Sun, Moon, Monitor, Languages, ChevronDown } from "lucide-vue-next";
 import { useTheme } from "../composables/useTheme";
 
 defineProps({
@@ -16,8 +16,8 @@ defineProps({
 });
 
 const router = useRouter();
-const { t, locale } = useI18n();
-const { isDark, toggleTheme } = useTheme();
+const { t } = useI18n();
+const { isDark, themeMode, setThemeMode } = useTheme();
 const open = ref(false);
 let closeMenuTimer = null;
 const {
@@ -134,35 +134,37 @@ onBeforeUnmount(() => {
       <p class="m-0 mt-1 text-sm text-zinc-500 dark:text-zinc-400">{{ subtitle }}</p>
     </div>
 
-    <div class="flex items-center gap-2 sm:ml-auto">
+    <div class="flex flex-wrap items-center gap-2 sm:ml-auto">
       <button v-if="showBack" class="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800/50 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-colors" @click="goBack" :title="t('common.back')">
         <ArrowLeft class="w-5 h-5" />
       </button>
 
-      <button class="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800/50 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-500 dark:text-zinc-400 transition-colors" @click="toggleTheme" title="Toggle theme">
-        <Sun v-if="isDark" class="w-5 h-5" />
-        <Moon v-else class="w-5 h-5" />
-      </button>
-
-      <div class="flex items-center gap-1 p-1 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900" :aria-label="t('common.language')">
-        <Languages class="w-4 h-4 text-zinc-400 dark:text-zinc-500 ml-2" />
-        <button
-          type="button"
-          class="px-3 py-1 text-xs font-semibold rounded-full transition-colors"
-          :class="locale === 'zh-CN' ? 'bg-emerald-500 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'"
-          @click="changeLocale('zh-CN')"
-        >
-          {{ t("topbar.zhCN") }}
-        </button>
-        <button
-          type="button"
-          class="px-3 py-1 text-xs font-semibold rounded-full transition-colors"
-          :class="locale === 'en-US' ? 'bg-emerald-500 text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200'"
-          @click="changeLocale('en-US')"
-        >
-          {{ t("topbar.enUS") }}
-        </button>
-      </div>
+      <label class="flex h-10 items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 pl-3 pr-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <Monitor v-if="themeMode === 'system'" class="h-4 w-4 shrink-0" />
+        <Moon v-else-if="isDark" class="h-4 w-4 shrink-0" />
+        <Sun v-else class="h-4 w-4 shrink-0" />
+        <span>{{ t('common.theme') }}</span>
+        <span class="relative">
+          <select :value="themeMode" @change="setThemeMode($event.target.value)" :aria-label="t('common.theme')" class="h-8 max-w-36 appearance-none rounded-full bg-transparent py-1 pl-1 pr-5 font-semibold text-zinc-700 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+            <option value="system">{{ t('common.followSystem') }}</option>
+            <option value="light">{{ t('common.lightMode') }}</option>
+            <option value="dark">{{ t('common.darkMode') }}</option>
+          </select>
+          <ChevronDown class="pointer-events-none absolute right-0 top-2 h-4 w-4" />
+        </span>
+      </label>
+      <label class="flex h-10 items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 pl-3 pr-2 text-xs text-zinc-500 dark:text-zinc-400">
+        <Languages class="h-4 w-4 shrink-0" />
+        <span>{{ t('common.language') }}</span>
+        <span class="relative">
+          <select :value="localeMode" @change="changeLocale($event.target.value)" :aria-label="t('common.language')" class="h-8 max-w-36 appearance-none rounded-full bg-transparent py-1 pl-1 pr-5 font-semibold text-zinc-700 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer">
+            <option value="system">{{ t('common.followSystem') }}</option>
+            <option value="zh-CN">{{ t('topbar.zhCN') }}</option>
+            <option value="en-US">{{ t('topbar.enUS') }}</option>
+          </select>
+          <ChevronDown class="pointer-events-none absolute right-0 top-2 h-4 w-4" />
+        </span>
+      </label>
 
       <button class="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800/50 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-emerald-600 dark:text-emerald-400 transition-colors" @click="go('/store')" :title="t('common.allApps')">
         <ShoppingBag class="w-5 h-5" />
