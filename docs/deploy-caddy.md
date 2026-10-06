@@ -20,6 +20,8 @@ aivudaappstore install
 - 写入 `aivudaappstore.service`
 - 注入 `APPSTORE_PUBLIC_HTTPS_HOST` 与 `APPSTORE_PRIVATE_HTTPS_HOST`
 
+已有安装升级后重新运行 `aivudaappstore install`，以同步包含 HTTP 8540 入口的 Caddy 模板。
+
 常用命令：
 
 ```bash
@@ -53,6 +55,8 @@ bash aivudaappstore/resources/scripts/_run_aivudaappstore_stack.sh --dev
 
 当前路由保持：
 
+- `http://127.0.0.1:8540`：仅监听回环地址，供 MCP 调用完整管理 API 和静态文件下载。
+- 所有入口的 `/aivuda_app_store/files/*` 均由 Caddy 直接提供静态文件。
 - `https://<public-host>:8580`
   - `/aivuda_app_store/store*` 反代到 `127.0.0.1:9001`
   - 其他路径浏览 `$HOME/aivudaAppStore_ws/data/files/apps`

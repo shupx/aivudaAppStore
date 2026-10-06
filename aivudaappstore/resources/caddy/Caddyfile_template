@@ -49,6 +49,12 @@
   }
 }
 
+http://127.0.0.1:8540 {
+  bind 127.0.0.1
+  import file_server
+  import appstore_api_all
+}
+
 https://{$APPSTORE_PUBLIC_HTTPS_HOST:127.0.0.1}:8580, https://{$APPSTORE_PRIVATE_HTTPS_HOST:127.0.0.1}:8580 {
   tls internal
   import file_server

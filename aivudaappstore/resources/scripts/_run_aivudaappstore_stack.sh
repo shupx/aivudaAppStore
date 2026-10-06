@@ -165,6 +165,7 @@ trap shutdown TERM INT
 
 sleep 2
 echo "Aivuda AppStore web addresses:"
+echo "  Local HTTP / MCP upstream: http://127.0.0.1:8540"
 echo "  Admin:  https://${APPSTORE_PRIVATE_HTTPS_HOST}:8543"
 echo "  Public: https://${APPSTORE_PUBLIC_HTTPS_HOST}:8580"
 

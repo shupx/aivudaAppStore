@@ -217,5 +217,6 @@ systemctl --user enable --now aivudaappstore.service
 
 echo ""
 echo "aivudaappstore.service is started and enabled."
+echo "  Local HTTP / MCP upstream: http://127.0.0.1:8540"
 echo "  Admin UI:  https://${APPSTORE_PRIVATE_HTTPS_HOST:-127.0.0.1}:8543"
 echo "  Public UI: https://${APPSTORE_PUBLIC_HTTPS_HOST:-127.0.0.1}:8580"
