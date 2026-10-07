@@ -12,6 +12,7 @@
 - `scripts/pre_install.sh`：安装前脚本示例。
 - `scripts/pre_uninstall.sh`：卸载前脚本示例。
 - `scripts/update_this_version.sh`：版本内更新脚本示例。
+- `scripts/docker_helpers.sh`：可复制到新 App 的 host/Docker 执行 helper（默认入口不启用 Docker）。
 - `start.sh`：app入口sh。
 - `ui/index.html`：示例内置 UI 首页（供 aivudaOS iframe 挂载）。
 - `config/default_config.yaml`：默认配置文件。
@@ -141,3 +142,43 @@ run:
 - `AIVUDA_APP_HELPERS_ENTRY_PATH`：统一 helper 入口脚本路径
 
 示例脚本会先 `source "$AIVUDA_APP_HELPERS_ENTRY_PATH"`，再通过 `aivuda_yaml_get` 读取例如 `robot.motion.max_speed_mps` 这类 dotted path 参数。
+
+## 新 App 使用 Docker helper
+
+通过 AppStore“下载示例包”或 MCP `store_sample_package` 获取本包后，将
+`scripts/docker_helpers.sh` 复制到新 App 的同名路径。它随示例包分发，不需要
+ACEswarm/AivudaOS 源码，也不是 `AIVUDA_APP_HELPERS_ENTRY_PATH` 自动提供的文件。
+当前示例默认仍在宿主机运行；复制 helper 并不意味着自动创建或启用容器。
+
+在新 App 的入口或安装 hook 中调用：
+
+```bash
+APP_ROOT="${AIVUDA_APP_INSTALL_PATH:?}"
+source "${APP_ROOT}/scripts/docker_helpers.sh"
+docker_helper_target_use_docker_container 'my-running-container'
+docker_helper_target_require_available '[start.sh]'
+docker_helper_target_exec_bash 'exec bash /opt/my-app/scripts/run_in_target.sh'
+```
+
+上述容器名和容器内路径需要替换为实际配置；`run_in_target.sh` 由新 App 提供。
+容器必须已运行，且工作负载文件和依赖必须已存在于容器。helper 不自动创建容器、
+挂载文件或转发宿主机环境变量。命令参数来自配置时，使用 `printf %q` 逐项转义；
+显式传入工作负载需要的 `AIVUDA_*` 环境变量，并映射对应配置/runtime 路径。
+
+主要接口：
+
+| 接口 | 用途 |
+|---|---|
+| `docker_helper_target_use_host` | 选择宿主机执行 |
+| `docker_helper_target_use_docker_container NAME` | 选择已有容器 |
+| `docker_helper_target_require_available [PREFIX]` | 校验执行目标 |
+| `docker_helper_target_exec_bash COMMAND` | 在目标运行 Bash 命令字符串，返回退出码 |
+| `docker_helper_target_select_install_target` | 安装时交互选择宿主机或运行中的容器，非 TTY 默认宿主机 |
+| `docker_helper_target_is_docker` / `docker_helper_target_container` | 查询选择结果 |
+| `docker_helper_set_yaml_value PATH KEY TYPE VALUE` | 修改 dotted key 的 YAML 值，需要宿主机 Python3/PyYAML |
+
+Docker 执行会记录容器内 PID/进程组，在退出/信号时尝试清理工作负载；容器具备
+`setsid` 时可按进程组清理。每个入口进程不支持并发/嵌套 managed exec；多个节点
+应由一个容器内 supervisor 管理。不要用 `exec` 调用 shell helper 函数，也不要覆盖
+helper 的清理 trap。上线前验证停止/重启后容器内没有残留或重复进程；不要停止共享
+容器来代替停止单个 App。

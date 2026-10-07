@@ -324,6 +324,7 @@ Authorization: Bearer <access_token>
 
 - **GET** `/aivuda_app_store/store/sample-package`
 - 返回文件名默认是 `aivuda-app-pkg-example.tar.gz` 示例包；系统安装包实际支持 `zip` / `tar.gz` / `tgz` / `tar` / `tar.xz` / `txz`
+- 包内包含可复用的 `scripts/docker_helpers.sh`，供新 App 选择 host/已有 Docker 容器执行并管理工作负载清理；用法见[示例包说明](../aivudaappstore/resources/samples/aivuda-app-pkg-example/README.md)。默认示例不启用 Docker。
 
 ## 5. 常见错误码
 

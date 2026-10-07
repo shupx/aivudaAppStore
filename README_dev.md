@@ -9,6 +9,11 @@
 - `aivudaappstore/resources/scripts/`：CLI 调用的运维脚本
 - `aivudaappstore/resources/samples/`：只读示例应用源码
 
+示例包包含可复用的 `scripts/docker_helpers.sh`，通过“下载示例包”或 MCP
+`store_sample_package` 分发。开发新 App 时可直接复制，无需平台源码。默认示例
+不启用 Docker；接口、路径/环境要求和停止清理限制见
+[示例包说明](aivudaappstore/resources/samples/aivuda-app-pkg-example/README.md)。
+
 ## 运行时工作区
 
 运行时默认写入：
