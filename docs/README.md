@@ -21,5 +21,5 @@ MCP 默认连接 Caddy 回环 HTTP 入口 `http://127.0.0.1:8540/aivuda_app_stor
 
 - [app-package-spec.md](../aivudaappstore/resources/samples/aivuda-app-pkg-example/README.md)
 - [api-usage.md](api-usage.md)
-- [mcp.md](mcp.md)
+- [mcp.md](mcp.md)：受保护工具自动用默认账号登录并缓存临时 token，支持失效重登和显式凭据覆盖。
 - [deploy-caddy.md](deploy-caddy.md)

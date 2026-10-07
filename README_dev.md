@@ -117,7 +117,9 @@ python3 -m aivudaappstore.mcp_server --host 127.0.0.1 --port 28795
 完成 `aivudaappstore install` 后可直接运行 `aivudaappstore-mcp` 或上述 Python 命令。
 `AIVUDAAPPSTORE_MCP_BASE_URL` 默认 `http://127.0.0.1:8540/aivuda_app_store`，
 通过 Caddy 回环 HTTP 入口调用 API 和下载应用包；此入口与 HTTPS 管理入口使用相同路由。
-`AIVUDAAPPSTORE_MCP_TOKEN` 转发为后端 Bearer token；也可先调用 `dev_login`，
-再逐次传入 `authorization: "Bearer <token>"`，后端仍执行正常权限检查。
+受保护工具默认用 `admin / admin123` 自动登录并缓存临时 token，失效后重登重试一次；公开查询无需登录。
+默认登录失败才需提供当前账号密码；可设置 `AIVUDAAPPSTORE_MCP_USERNAME`/`AIVUDAAPPSTORE_MCP_PASSWORD`，
+或调用 `dev_login` 后逐次传入 `authorization: "Bearer <token>"`。
+`AIVUDAAPPSTORE_MCP_TOKEN` 是可选的显式覆盖，后端仍执行正常权限检查。
 MCP 入站认证使用独立的 `AIVUDAAPPSTORE_MCP_ACCESS_TOKEN`。
 详细配置和文件调用见 [docs/mcp.md](docs/mcp.md)。
